@@ -1,0 +1,27 @@
+[project]
+name = "deepagents-code-cli"
+version = "0.1.0"
+description = "Launch deepagents code CLI with the evroc model provider and the dynamic_tools plugin"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "deepagents-code==0.1.65",
+    "evroc",
+]
+
+[tool.uv.sources]
+evroc = { path = "evroc", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.5",
+    "shellcheck-py>=0.11.0.1",
+    "ty>=0.0.77",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["marketplace/plugins/dynamic_tools/tests"]
+pythonpath = ["."]

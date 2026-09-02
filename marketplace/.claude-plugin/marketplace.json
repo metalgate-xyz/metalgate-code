@@ -1,0 +1,11 @@
+{
+  "name": "evroc-extensions",
+  "plugins": [
+    {
+      "name": "dynamic_tools",
+      "source": "./plugins/dynamic_tools",
+      "description": "Dynamically loads .py tool files from .metalgate/tools (current project root + agent project root) and registers their callables as model tools. Exposes write_tool_file, reload_dynamic_tools, and list_dynamic_tools.",
+      "author": "evroc"
+    }
+  ]
+}

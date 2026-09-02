@@ -1,0 +1,11 @@
+{
+  "name": "dynamic_tools",
+  "version": "0.1.0",
+  "displayName": "Dynamic Tools",
+  "description": "Dynamically loads .py tool files from .metalgate/tools (local project) and .metalgate/global_tools (agent repo). Registers their callables as model tools. Exposes write_tool_file, reload_dynamic_tools, and list_dynamic_tools.",
+  "extensions": {
+    "com.langchain.deepagents.code": {
+      "pythonExtensions": "./extension/__init__.py"
+    }
+  }
+}
