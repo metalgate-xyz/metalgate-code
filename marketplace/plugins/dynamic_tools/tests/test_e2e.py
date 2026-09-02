@@ -65,6 +65,7 @@ def _run_headless(prompt: str) -> str:
         capture_output=True,
         text=True,
         timeout=120,
+        check=False,
     )
     return result.stdout + result.stderr
 

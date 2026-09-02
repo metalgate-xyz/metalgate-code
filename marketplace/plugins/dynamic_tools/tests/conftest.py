@@ -40,6 +40,8 @@ if _PKG not in sys.modules:
         _EXT / "__init__.py",
         submodule_search_locations=[str(_EXT)],
     )
+    if _spec is None or _spec.loader is None:
+        raise ImportError(f"could not load extension package from {_EXT}")
     _module = importlib.util.module_from_spec(_spec)
     sys.modules[_PKG] = _module
-    _spec.loader.exec_module(_module)  # type: ignore[union-attr]
+    _spec.loader.exec_module(_module)

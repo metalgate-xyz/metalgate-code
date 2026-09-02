@@ -64,6 +64,13 @@ async def _run_extension(api: ExtensionAPI) -> ExtensionRegistry:
     return api._registry  # type: ignore[attr-defined]
 
 
+def _unit(registry: ExtensionRegistry, name: str):
+    """Find a registered tool by name; assert it exists and return its unit."""
+    found = registry.find_tool(name)
+    assert found is not None, f"{name} not registered; have {registry.tool_units()}"
+    return found.unit
+
+
 # ---------------------------------------------------------------------------
 # Tool file discovery + registration
 # ---------------------------------------------------------------------------
@@ -85,10 +92,8 @@ async def test_loads_tool_from_current_project_root(tmp_path, monkeypatch):
     api, registry = _make_api(tmp_path, tmp_path)
     await _run_extension(api)
 
-    unit = registry.find_tool("say_hello")
-    assert unit is not None, registry.tool_units()
     # The registered BaseTool is invocable directly.
-    assert unit.unit.invoke({"name": "marx"}) == "hello marx"
+    assert _unit(registry, "say_hello").invoke({"name": "marx"}) == "hello marx"
 
 
 async def test_loads_tools_from_both_roots(tmp_path, monkeypatch):
@@ -192,7 +197,7 @@ async def test_first_registration_wins_on_reload(tmp_path, monkeypatch):
 
     api, registry = _make_api(tmp_path, tmp_path)
     await _run_extension(api)
-    original = registry.find_tool("say_hello").unit
+    original = _unit(registry, "say_hello")
 
     # Edit the file in place and call reload_dynamic_tools(). The mtime changes
     # so the file is re-imported, but the tool NAME is already registered, so
@@ -206,10 +211,10 @@ async def test_first_registration_wins_on_reload(tmp_path, monkeypatch):
             """
         )
     )
-    reload_tool = registry.find_tool("reload_dynamic_tools").unit
+    reload_tool = _unit(registry, "reload_dynamic_tools")
     result = reload_tool.invoke({})
     assert "No new or changed tools found" in result or "Registered" not in result
-    assert registry.find_tool("say_hello").unit is original
+    assert _unit(registry, "say_hello") is original
 
 
 async def test_reload_picks_up_brand_new_tool(tmp_path, monkeypatch):
@@ -226,7 +231,7 @@ async def test_reload_picks_up_brand_new_tool(tmp_path, monkeypatch):
     tools_dir.joinpath("bye.py").write_text(
         "def say_bye() -> str:\n    '''bye'''\n    return 'bye'"
     )
-    reload_tool = registry.find_tool("reload_dynamic_tools").unit
+    reload_tool = _unit(registry, "reload_dynamic_tools")
     out = reload_tool.invoke({})
     assert "say_bye" in out
     assert registry.find_tool("say_bye") is not None
@@ -242,7 +247,7 @@ async def test_write_tool_file_rejects_path_separators(tmp_path, monkeypatch):
     api, registry = _make_api(tmp_path, tmp_path)
     await _run_extension(api)
 
-    write_tool = registry.find_tool("write_tool_file").unit
+    write_tool = _unit(registry, "write_tool_file")
     for bad in ["../x.py", "a/b.py", ".hidden.py"]:
         assert "Refusing" in write_tool.invoke({"filename": bad, "code": "x = 1"})
 
@@ -252,7 +257,7 @@ async def test_write_then_load_roundtrip(tmp_path, monkeypatch):
     api, registry = _make_api(tmp_path, tmp_path)
     await _run_extension(api)
 
-    write_tool = registry.find_tool("write_tool_file").unit
+    write_tool = _unit(registry, "write_tool_file")
     out = write_tool.invoke(
         {
             "filename": "dyn.py",
@@ -261,11 +266,11 @@ async def test_write_then_load_roundtrip(tmp_path, monkeypatch):
     )
     assert "Wrote" in out
 
-    reload_tool = registry.find_tool("reload_dynamic_tools").unit
+    reload_tool = _unit(registry, "reload_dynamic_tools")
     assert "dyn_tool" in reload_tool.invoke({})
     assert registry.find_tool("dyn_tool") is not None
 
-    list_tool = registry.find_tool("list_dynamic_tools").unit
+    list_tool = _unit(registry, "list_dynamic_tools")
     listing = list_tool.invoke({})
     assert "dyn_tool" in listing
 

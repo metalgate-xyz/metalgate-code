@@ -119,9 +119,11 @@ def _import_module(path: Path):
     # unique module name per file so reimports don't collide
     mod_name = f"dcode_dynamic_tools.{path.stem}_{abs(hash(str(path)))}"
     spec = importlib.util.spec_from_file_location(mod_name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"could not create module spec for {path}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[mod_name] = module
-    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    spec.loader.exec_module(module)
     return module
 
 
