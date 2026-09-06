@@ -10,13 +10,16 @@
 #   EVROC_MODEL      Model identifier (optional, default: zai-org/GLM-5.2).
 #   EVROC_BASE_URL   Override the evroc base URL (optional).
 #
+# The virtual environment is always taken from this script's directory via
+# `uv --project`, which discovers the venv without changing the working
+# directory (`uv --directory` is the flag that cds).
+#
 # Auto-loaded from ~/.metalgate/.env if present; the environment takes
 # precedence over the file.
 #
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "${SCRIPT_DIR}"
 
 # --- Environment ------------------------------------------------------------
 ENV_FILE="${HOME}/.metalgate/.env"
@@ -37,12 +40,12 @@ export DEEPAGENTS_HOME="${SCRIPT_DIR}/.metalgate"
 mkdir -p "${DEEPAGENTS_HOME}"
 
 # --- Install ----------------------------------------------------------------
-uv sync --quiet
+uv --project "${SCRIPT_DIR}" sync --quiet
 
 # Fetch models into .evroc/models.json for the /model switcher. A failed
 # fetch is non-fatal: dcode launches against a stale file if one exists.
 set +e
-uv run python "${SCRIPT_DIR}/scripts/fetch_models.py"
+uv --project "${SCRIPT_DIR}" run python "${SCRIPT_DIR}/scripts/fetch_models.py"
 set -e
 
 # --- config.toml ------------------------------------------------------------
@@ -71,8 +74,8 @@ EOF
 
 # --- Marketplace + plugin (both commands are idempotent) --------------------
 MARKETPLACE_DIR="${SCRIPT_DIR}/marketplace"
-uv run dcode plugin marketplace add "${MARKETPLACE_DIR}" >/dev/null
-uv run dcode plugin install "dynamic_tools@evroc-extensions" >/dev/null
+uv --project "${SCRIPT_DIR}" run dcode plugin marketplace add "${MARKETPLACE_DIR}" >/dev/null
+uv --project "${SCRIPT_DIR}" run dcode plugin install "dynamic_tools@evroc-extensions" >/dev/null
 
 # --- Launch -----------------------------------------------------------------
-exec uv run dcode "$@"
+exec uv --project "${SCRIPT_DIR}" run dcode "$@"
