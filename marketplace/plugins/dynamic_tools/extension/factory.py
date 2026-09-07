@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from .dynamic_tools import (
     LOCAL_TOOLS_DIRNAME,
-    _registered_names,
+    _state_for,
     resolve_tool_directories,
     scan_and_register,
 )
@@ -75,9 +75,10 @@ async def extension(api: ExtensionAPI) -> None:
     def list_dynamic_tools() -> str:
         """List the tool names currently registered from the dynamic tools
         directories."""
-        if not _registered_names:
+        names = _state_for(api).registered_names
+        if not names:
             return "No dynamic tools registered yet."
-        return "Registered dynamic tools: " + ", ".join(sorted(_registered_names))
+        return "Registered dynamic tools: " + ", ".join(sorted(names))
 
     api.register_tool(reload_dynamic_tools)
     api.register_tool(write_tool_file)

@@ -74,9 +74,61 @@ LOCAL_TOOLS_DIRNAME = ".metalgate/tools"
 # ``.metalgate/tools`` into the global namespace.
 GLOBAL_TOOLS_DIRNAME = ".metalgate/global_tools"
 
-# module-level state, shared across calls within this process
+# Per-registry dedup state. dcode (>=0.1.66) builds a fresh ExtensionRegistry
+# per workspace binding, invoking this extension factory more than once in the
+# same process. Dedup state must therefore be scoped to the registry instance,
+# not held in a process-global set: a brand-new registry that shares nothing
+# with the previous (now-discarded) one would otherwise skip every tool file
+# because a process-global mtime/name set already recorded them -- silently
+# dropping dynamically-loaded tools (e.g. ``.metalgate/tools/*.py``) from the
+# registry that actually serves the request.
+#
+# The state is stored directly on the ``ExtensionRegistry`` object under
+# ``_dynamic_tools_state`` (a regular class with ``__dict__``), so it lives and
+# dies with that registry -- no ``id()`` reuse hazard, no stale entries to prune.
+# A fresh registry starts with no state, so its first ``scan_and_register``
+# registers every tool file into it even if an earlier registry in this process
+# already saw the same files.
+#
+# ``_loaded_mtimes`` and ``_registered_names`` below are retained only for
+# backward compatibility with callers that clear them between runs; the live
+# dedup state lives on the registry and these module globals are unused.
 _loaded_mtimes: dict[str, float] = {}
 _registered_names: set[str] = set()
+
+_REGISTRY_STATE_ATTR = "_dynamic_tools_state"
+
+
+class _RegistryState:
+    """Dedup state scoped to one ``ExtensionRegistry``.
+
+    ``loaded_mtimes`` skips re-importing an unchanged file on rescan (so
+    ``reload_dynamic_tools()`` only re-imports files whose mtime changed).
+    ``registered_names`` enforces first-registration-wins *within this
+    registry*: editing an existing tool's code and reloading keeps the original
+    implementation live (a full ``/restart`` is required to swap it).
+    """
+
+    __slots__ = ("loaded_mtimes", "registered_names")
+
+    def __init__(self) -> None:
+        self.loaded_mtimes: dict[str, float] = {}
+        self.registered_names: set[str] = set()
+
+
+def _state_for(api: ExtensionAPI) -> _RegistryState:
+    """Return the dedup state bound to ``api``'s registry, creating it if new.
+
+    A fresh registry (a new workspace runtime) gets a fresh state, so tool files
+    register into it even when an earlier registry in this process already saw
+    them.
+    """
+    registry = api._registry  # type: ignore[attr-defined]
+    state = getattr(registry, _REGISTRY_STATE_ATTR, None)
+    if state is None:
+        state = _RegistryState()
+        setattr(registry, _REGISTRY_STATE_ATTR, state)
+    return state
 
 
 def _agent_project_root(api: ExtensionAPI) -> Path:
@@ -147,13 +199,14 @@ def scan_and_register(api: ExtensionAPI, directories: list[Path]) -> list[str]:
     """
     newly_registered: list[str] = []
     errors: list[str] = []
+    state = _state_for(api)
 
     for directory in directories:
         for path in _discover_files(directory):
             key = str(path)
             mtime = path.stat().st_mtime
-            if _loaded_mtimes.get(key) == mtime:
-                continue  # unchanged since last scan
+            if state.loaded_mtimes.get(key) == mtime:
+                continue  # unchanged since last scan of THIS registry
 
             try:
                 module = _import_module(path)
@@ -163,14 +216,15 @@ def scan_and_register(api: ExtensionAPI, directories: list[Path]) -> list[str]:
 
             for name, fn in _extract_callables(module):
                 tool_name = getattr(fn, "name", None) or getattr(fn, "__name__", name)
-                if tool_name in _registered_names:
-                    # first registration wins -- can't hot-swap; needs /restart
+                if tool_name in state.registered_names:
+                    # first registration wins within this registry -- can't
+                    # hot-swap; needs /restart
                     continue
                 api.register_tool(fn)
-                _registered_names.add(tool_name)
+                state.registered_names.add(tool_name)
                 newly_registered.append(tool_name)
 
-            _loaded_mtimes[key] = mtime
+            state.loaded_mtimes[key] = mtime
 
     if errors:
         newly_registered.append(f"[errors: {'; '.join(errors)}]")
