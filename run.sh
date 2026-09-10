@@ -9,6 +9,7 @@
 #   EVROC_API_KEY    API key for the evroc platform (required).
 #   EVROC_MODEL      Model identifier (optional, default: zai-org/GLM-5.2).
 #   EVROC_BASE_URL   Override the evroc base URL (optional).
+#   DCODE_NO_SANDBOX Set to any non-empty value to launch unsandboxed.
 #
 # The virtual environment is always taken from this script's directory via
 # `uv --project`, which discovers the venv without changing the working
@@ -72,10 +73,23 @@ use_responses_api = false
 tool_calling = true
 EOF
 
+# --- Sandbox ----------------------------------------------------------------
+# Run under the seatbelt sandbox on macOS unless explicitly disabled. This
+# keeps the sandbox dependency tied to the platform that provides it and
+# leaves the unsandboxed path a one-line opt-out.
+SANDBOX_ARGS=()
+if [[ "$(uname -s)" == "Darwin" && -z "${DCODE_NO_SANDBOX:-}" ]]; then
+    SANDBOX_ARGS=(--sandbox seatbelt)
+fi
+
 # --- Marketplace + plugin (both commands are idempotent) --------------------
 MARKETPLACE_DIR="${SCRIPT_DIR}/marketplace"
 uv --project "${SCRIPT_DIR}" run dcode plugin marketplace add "${MARKETPLACE_DIR}" >/dev/null
 uv --project "${SCRIPT_DIR}" run dcode plugin install "dynamic_tools@evroc-extensions" >/dev/null
 
 # --- Launch -----------------------------------------------------------------
-exec uv --project "${SCRIPT_DIR}" run dcode "$@"
+# `${SANDBOX_ARGS[@]+"${SANDBOX_ARGS[@]}"}` is the bash-3.2-safe empty-array
+# expansion: macOS ships bash 3.2, where `"${a[@]}"` under `set -u` errors on
+# an empty array ("unbound variable"). The `${a[@]+...}` guard expands to
+# nothing when the array is empty, and to the full array otherwise.
+exec uv --project "${SCRIPT_DIR}" run dcode ${SANDBOX_ARGS[@]+"${SANDBOX_ARGS[@]}"} "$@"

@@ -1,16 +1,18 @@
 [project]
-name = "deepagents-code-cli"
+name = "metalgate-code-cli"
 version = "0.1.0"
 description = "Launch deepagents code CLI with the evroc model provider and the dynamic_tools plugin"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "deepagents-code==0.1.66",
+    "deepagents-code==0.1.68",
     "evroc",
+    "dcode-seatbelt-sandbox",
 ]
 
 [tool.uv.sources]
 evroc = { path = "evroc", editable = true }
+dcode-seatbelt-sandbox = { path = "seatbelt-sandbox", editable = true }
 
 [dependency-groups]
 dev = [
@@ -23,5 +25,8 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["marketplace/plugins/dynamic_tools/tests"]
+testpaths = [
+    "marketplace/plugins/dynamic_tools/tests",
+    "seatbelt-sandbox/tests",
+]
 pythonpath = ["."]
