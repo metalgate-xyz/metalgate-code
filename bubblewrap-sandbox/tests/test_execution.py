@@ -139,18 +139,14 @@ class TestLaunchDir:
 class TestReadPaths:
     """`read_paths` adds extra readable bind mounts on top of the launch dir."""
 
-    @pytest.mark.parametrize(
-        "sandbox", [[str(Path.home())]], indirect=True
-    )
+    @pytest.mark.parametrize("sandbox", [[str(Path.home())]], indirect=True)
     def test_read_paths_makes_home_visible(self, sandbox: BubblewrapSandbox) -> None:
         # With ~ in read_paths, $HOME becomes readable (but NOT writable).
         r = sandbox.execute(f"ls {HOME} 2>&1; echo exit=$?")
         assert r.exit_code == 0, r.output
         assert "No such file or directory" not in r.output, r.output
 
-    @pytest.mark.parametrize(
-        "sandbox", [[str(Path.home())]], indirect=True
-    )
+    @pytest.mark.parametrize("sandbox", [[str(Path.home())]], indirect=True)
     def test_read_paths_do_not_allow_writes(self, sandbox: BubblewrapSandbox) -> None:
         # read_paths bind is ro; writes to $HOME stay blocked. The command runs
         # `echo x > target; echo exit=$?` -- the trailing `echo exit=$?` is a
@@ -159,7 +155,9 @@ class TestReadPaths:
         target = Path.home() / f".bwrap-rwtest-{os.getpid()}"
         try:
             r = sandbox.execute(f"echo x > {target} 2>&1; echo exit=$?")
-            assert "Read-only file system" in r.output or "Permission denied" in r.output, r.output
+            assert (
+                "Read-only file system" in r.output or "Permission denied" in r.output
+            ), r.output
             assert "exit=" in r.output and "exit=0" not in r.output, r.output
             assert target.exists() is False
         finally:
@@ -186,7 +184,9 @@ class TestProcessBootstrap:
         assert str(launch) in r.output or str(launch.resolve()) in r.output, r.output
 
     @pytest.mark.parametrize("sandbox", [None], indirect=True)
-    def test_concurrent_execute_is_independent(self, sandbox: BubblewrapSandbox) -> None:
+    def test_concurrent_execute_is_independent(
+        self, sandbox: BubblewrapSandbox
+    ) -> None:
         """Parallel tool calls on one sandbox must all run. Each is an
         independent bwrap invocation sharing no state, so this pins that the
         argv rebuild-on-every-call contract holds under concurrency."""
@@ -263,7 +263,9 @@ class TestNetwork:
         r = sb.execute("cat /proc/net/dev 2>&1")
         lines = [ln for ln in r.output.splitlines() if ln.strip() and ":" in ln]
         names = [ln.split(":")[0].strip() for ln in lines]
-        assert names == ["lo"], f"expected only lo in unshared netns, got {names}: {r.output}"
+        assert names == ["lo"], (
+            f"expected only lo in unshared netns, got {names}: {r.output}"
+        )
 
 
 # --- grep (inherited BaseSandbox.grep, GNU grep -Z) -------------------------

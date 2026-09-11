@@ -1,22 +1,25 @@
-"""Pure-logic tests that don't require `bwrap`.
-
-These cover the parts of the provider that are exercised without actually
-running a command under bubblewrap: sandbox_id validation, the
-`_existing` / `_tool_read_paths` helpers, and the BaseSandbox abstract
-surface. They run on any OS -- Linux/bwrap is not required.
+"""Bubblewrap provider tests: sandbox_id validation, the `_existing` /
+`_tool_read_paths` helpers, and the BaseSandbox abstract surface. Some cases
+exercise `bwrap`, so these require Linux.
 """
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
 from dcode_bubblewrap_sandbox import BubblewrapSandbox
 from dcode_bubblewrap_sandbox.provider import (
     _ID_PATTERN,
-    _existing,
     _SYSTEM_RO_BINDS,
+    _existing,
     _tool_read_paths,
+)
+
+pytestmark = pytest.mark.skipif(
+    sys.platform != "linux",
+    reason="bubblewrap tests require Linux",
 )
 
 # --- sandbox_id validation -------------------------------------------------
@@ -101,7 +104,9 @@ class TestExisting:
         out = _existing([str(link)])
         assert out == [str(target.resolve())]
 
-    def test_expands_user(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_expands_user(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         monkeypatch.setenv("HOME", str(tmp_path))
         d = tmp_path / "proj"
         d.mkdir()
@@ -116,12 +121,16 @@ class TestToolReadPaths:
     """`_tool_read_paths` resolves `_TOOL_READ_PATHS` against $HOME and skips
     nonexistent ones, so a tool not installed doesn't produce a failed bind."""
 
-    def test_skips_nonexistent(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_skips_nonexistent(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         monkeypatch.setenv("HOME", str(tmp_path))
         # Nothing created -> no tool paths exist -> empty.
         assert _tool_read_paths() == []
 
-    def test_returns_existing(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_returns_existing(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         monkeypatch.setenv("HOME", str(tmp_path))
         (tmp_path / ".cargo").mkdir()
         (tmp_path / ".config" / "git").mkdir(parents=True)
@@ -129,7 +138,9 @@ class TestToolReadPaths:
         assert str((tmp_path / ".cargo").resolve()) in out
         assert str((tmp_path / ".config" / "git").resolve()) in out
 
-    def test_includes_files(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def test_includes_files(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
         # A path that exists but is a file (e.g. ~/.gitconfig) is included --
         # bwrap --ro-bind works on files, and .gitconfig/.npmrc are files the
         # toolchain needs to read.
@@ -158,7 +169,9 @@ class TestSystemRoBinds:
                 assert binds[sym] is True
 
     def test_run_exposed_only_via_resolv_subdirs(self) -> None:
-        run_binds = [dst for _src, dst, _try in _SYSTEM_RO_BINDS if dst.startswith("/run")]
+        run_binds = [
+            dst for _src, dst, _try in _SYSTEM_RO_BINDS if dst.startswith("/run")
+        ]
         # Only the two resolv.conf-related subdirs, not /run itself.
         assert "/run/systemd/resolve" in run_binds
         assert "/run/resolvconf" in run_binds

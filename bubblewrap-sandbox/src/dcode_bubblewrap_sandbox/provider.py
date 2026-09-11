@@ -524,7 +524,9 @@ class BubblewrapSandbox(BaseSandbox):
                 responses.append(FileUploadResponse(path=path, error=None))
             else:
                 detail = err.decode("utf-8", errors="replace").strip()
-                responses.append(FileUploadResponse(path=path, error=detail or f"exit {rc}"))
+                responses.append(
+                    FileUploadResponse(path=path, error=detail or f"exit {rc}")
+                )
         return responses
 
     def download_files(self, paths: list[str]) -> list[FileDownloadResponse]:
@@ -542,16 +544,26 @@ class BubblewrapSandbox(BaseSandbox):
                     content = base64.b64decode(out)
                 except (ValueError, binascii.Error):
                     detail = "base64 decode failed"
-                    responses.append(FileDownloadResponse(path=path, content=None, error=detail))
+                    responses.append(
+                        FileDownloadResponse(path=path, content=None, error=detail)
+                    )
                     continue
-                responses.append(FileDownloadResponse(path=path, content=content, error=None))
+                responses.append(
+                    FileDownloadResponse(path=path, content=content, error=None)
+                )
                 continue
             detail = err.decode("utf-8", errors="replace").lower()
             if "no such file" in detail or "not found" in detail:
-                responses.append(FileDownloadResponse(path=path, content=None, error="file_not_found"))
+                responses.append(
+                    FileDownloadResponse(
+                        path=path, content=None, error="file_not_found"
+                    )
+                )
             else:
                 msg = err.decode("utf-8", errors="replace").strip() or f"exit {rc}"
-                responses.append(FileDownloadResponse(path=path, content=None, error=msg))
+                responses.append(
+                    FileDownloadResponse(path=path, content=None, error=msg)
+                )
         return responses
 
 

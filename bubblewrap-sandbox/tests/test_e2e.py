@@ -104,9 +104,7 @@ def test_bubblewrap_sandbox_boots_and_fences() -> None:
         )
         answer = _run_headless(prompt)
         # The file must exist on the real filesystem (launch-dir write).
-        assert target.is_file(), (
-            f"agent did not create {target}; answer was:\n{answer}"
-        )
+        assert target.is_file(), f"agent did not create {target}; answer was:\n{answer}"
         # And the agent read it back (launch-dir read + transport).
         assert _FILE_MARKER in target.read_text(), (
             f"file contents wrong; answer was:\n{answer}"
