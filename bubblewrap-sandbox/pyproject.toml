@@ -1,0 +1,32 @@
+[project]
+name = "dcode-bubblewrap-sandbox"
+version = "0.1.0"
+description = "Local bubblewrap (bwrap) sandbox provider for deepagents-code (dcode), for Linux"
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+dependencies = [
+    "deepagents>=0.7.0",
+]
+
+[project.optional-dependencies]
+dcode = [
+    "deepagents-code",
+]
+test = [
+    "pytest>=9.1.1",
+]
+
+[project.entry-points."deepagents_code.sandbox_providers"]
+bubblewrap = "dcode_bubblewrap_sandbox.provider:BubblewrapProvider"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dcode_bubblewrap_sandbox"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

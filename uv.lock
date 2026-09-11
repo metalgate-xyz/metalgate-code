@@ -421,6 +421,22 @@ wheels = [
 ]
 
 [[package]]
+name = "dcode-bubblewrap-sandbox"
+version = "0.1.0"
+source = { editable = "bubblewrap-sandbox" }
+dependencies = [
+    { name = "deepagents" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "deepagents", specifier = ">=0.7.0" },
+    { name = "deepagents-code", marker = "extra == 'dcode'" },
+    { name = "pytest", marker = "extra == 'test'", specifier = ">=9.1.1" },
+]
+provides-extras = ["dcode", "test"]
+
+[[package]]
 name = "dcode-seatbelt-sandbox"
 version = "0.1.0"
 source = { editable = "seatbelt-sandbox" }
@@ -1371,6 +1387,7 @@ name = "metalgate-code-cli"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "dcode-bubblewrap-sandbox" },
     { name = "dcode-seatbelt-sandbox" },
     { name = "deepagents-code" },
     { name = "evroc" },
@@ -1387,6 +1404,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "dcode-bubblewrap-sandbox", editable = "bubblewrap-sandbox" },
     { name = "dcode-seatbelt-sandbox", editable = "seatbelt-sandbox" },
     { name = "deepagents-code", specifier = "==0.1.68" },
     { name = "evroc", editable = "evroc" },

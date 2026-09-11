@@ -74,12 +74,19 @@ tool_calling = true
 EOF
 
 # --- Sandbox ----------------------------------------------------------------
-# Run under the seatbelt sandbox on macOS unless explicitly disabled. This
-# keeps the sandbox dependency tied to the platform that provides it and
-# leaves the unsandboxed path a one-line opt-out.
+# Run under the seatbelt sandbox on macOS and the bubblewrap sandbox on Linux,
+# unless explicitly disabled. This keeps each sandbox dependency tied to the
+# platform that provides it and leaves the unsandboxed path a one-line opt-out.
 SANDBOX_ARGS=()
-if [[ "$(uname -s)" == "Darwin" && -z "${DCODE_NO_SANDBOX:-}" ]]; then
-    SANDBOX_ARGS=(--sandbox seatbelt)
+if [[ -z "${DCODE_NO_SANDBOX:-}" ]]; then
+    case "$(uname -s)" in
+        Darwin)
+            SANDBOX_ARGS=(--sandbox seatbelt)
+            ;;
+        Linux)
+            SANDBOX_ARGS=(--sandbox bubblewrap)
+            ;;
+    esac
 fi
 
 # --- Marketplace + plugin (both commands are idempotent) --------------------

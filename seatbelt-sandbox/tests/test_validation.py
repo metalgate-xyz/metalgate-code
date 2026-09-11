@@ -1,14 +1,11 @@
-"""Pure-logic tests that don't require `sandbox-exec`.
-
-These cover the parts of the provider that are exercised without actually
-running a command under Seatbelt: sandbox_id validation (charset only --
-the id flows into a profile filename, not a directory), the SBPL
-read-allow block builder, and the BaseSandbox abstract surface. They run
-on any OS -- macOS is not required.
+"""Seatbelt provider tests: sandbox_id validation, SBPL read-allow block
+builder, and the BaseSandbox abstract surface. Some cases exercise
+`sandbox-exec`, so these require macOS.
 """
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -18,6 +15,11 @@ from dcode_seatbelt_sandbox.provider import (
     _ancestor_metadata_rules,
     _build_bsd_grep_cmd,
     _read_allow_block,
+)
+
+pytestmark = pytest.mark.skipif(
+    sys.platform != "darwin",
+    reason="seatbelt tests require macOS",
 )
 
 # --- sandbox_id validation -------------------------------------------------
