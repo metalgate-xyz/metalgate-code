@@ -182,10 +182,15 @@ _PROFILE_HEADER = """\
 ;; Writes: launch dir only (plus /dev/null for shell redirections). Default
 ;; deny already blocks every other write, including all of /Users outside the
 ;; launch dir -- no separate /Users write-deny is needed.
+{write_allows}
 (allow file-write*
     (subpath "{launch}"))
 (allow file-write*
     (literal "/dev/null"))
+;; Go's toolchain (`go list`, `go build`) creates temp work dirs under /tmp
+;; (via /tmp, not TMPDIR), so a coding sandbox must allow writing there.
+(allow file-write*
+    (subpath "/private/tmp"))
 """
 """Static part of the SBPL profile. Placeholders:
 - ``{launch}``: the resolved (canonical, non-symlink) launch dir.
@@ -193,7 +198,10 @@ _PROFILE_HEADER = """\
   each launch-dir ancestor (for `cd` traversal).
 - ``{read_allows}``: full read re-allow rules for the launch dir, the curated
   tool paths, and any ``read_paths`` under ``/Users``. The network rule is
-  appended after this header."""
+  appended after this header.
+- ``{write_allows}``: write re-allow rules for curated tool cache paths under
+  ``/Users`` (e.g. the Go build cache) that compilers/LSP servers must write
+  to function. The launch-dir write rule follows."""
 
 
 # Toolchain and config subpaths under $HOME that a coding sandbox needs to
@@ -208,11 +216,14 @@ _TOOL_READ_PATHS = (
     # VCS
     ".gitconfig",
     ".config/git",
-    # Python (uv-managed toolchain, pip cache)
+    # Python (uv-managed toolchain, pip cache). uv's cache is read while
+    # resolving/extracting wheels and building the sdist index.
     ".local/share/uv",
     ".local/bin",
     ".cache/pip",
+    ".cache/uv",
     "Library/Caches/pip",
+    "Library/Caches/uv",
     # Node
     ".npmrc",
     ".local/lib/node_modules",
@@ -222,9 +233,35 @@ _TOOL_READ_PATHS = (
     ".rustup",
     # Go
     ".cache/go-build",
+    "Library/Caches/go-build",
     "go",
+    "go.work",
+    "Library/Caches/gopls",
     # Cargo/rust crates index
     ".cargo/registry",
+)
+
+
+# Toolchain cache subpaths under $HOME that a coding sandbox must WRITE to.
+# Compilers and language servers (gopls, rust-analyzer) build metadata into
+# these caches; denying writes breaks type checking and go-to-definition even
+# though the source is readable. Each entry is a relative path resolved against
+# $HOME; nonexistent ones are skipped at profile-build time. Symmetric to
+# `_TOOL_READ_PATHS`.
+_TOOL_WRITE_PATHS = (
+    # Go: gopls writes compiled package metadata to the build cache. Without
+    # write access it can't load views, so textDocument/definition returns null.
+    "Library/Caches/go-build",
+    ".cache/go-build",
+    # gopls's own cache (typerefs, export data, diagnostics). Without write
+    # access gopls logs errors on every request and degrades.
+    "Library/Caches/gopls",
+    ".cache/gopls",
+    # uv: writes downloaded wheels and the sdist git index (sdists-v9/.git)
+    # here; a read-only cache makes installs fail with "Operation not
+    # permitted" on the .git index.
+    ".cache/uv",
+    "Library/Caches/uv",
 )
 
 
@@ -238,6 +275,23 @@ def _tool_read_paths() -> list[str]:
     home = Path.home()
     out: list[str] = []
     for rel in _TOOL_READ_PATHS:
+        resolved = str((home / rel).resolve())
+        if not resolved.startswith("/Users/"):
+            continue
+        out.append(resolved)
+    return out
+
+
+def _tool_write_paths() -> list[str]:
+    """Resolve `_TOOL_WRITE_PATHS` against $HOME, returning existing /Users paths.
+
+    Same skip rules as `_tool_read_paths`: nonexistent paths are dropped (a
+    tool not installed generates no cache to write), and paths outside /Users
+    are skipped (writable system paths aren't under the /Users write fence).
+    """
+    home = Path.home()
+    out: list[str] = []
+    for rel in _TOOL_WRITE_PATHS:
         resolved = str((home / rel).resolve())
         if not resolved.startswith("/Users/"):
             continue
@@ -290,6 +344,26 @@ def _read_allow_block(launch: str, read_paths: list[str]) -> str:
             f'(allow file-read-data (subpath "{resolved}"))\n'
             f'(allow file-read-metadata (subpath "{resolved}"))'
         )
+    return "\n".join(lines)
+
+
+def _write_allow_block() -> str:
+    """Build the write re-allow rules for curated tool cache /Users subpaths.
+
+    Mirrors `_read_allow_block` for the tool caches that compilers and language
+    servers must write to (see `_TOOL_WRITE_PATHS`). Paths outside /Users are
+    skipped: the /Users write deny is implicit under ``(deny default)`` and
+    non-/Users paths are not fenced. Paths are resolved to canonical form so
+    the ``subpath`` literal matches kernel I/O (e.g. ``/tmp`` -> ``/private/tmp``).
+    """
+    lines: list[str] = []
+    seen: set[str] = set()
+    for raw in _tool_write_paths():
+        resolved = str(Path(raw).expanduser().resolve())
+        if resolved in seen or not resolved.startswith("/Users/"):
+            continue
+        seen.add(resolved)
+        lines.append(f'(allow file-write* (subpath "{resolved}"))')
     return "\n".join(lines)
 
 
@@ -455,9 +529,13 @@ class SeatbeltSandbox(BaseSandbox):
         # Don't inherit dcode's environment: it typically carries API keys and
         # tokens (OPENAI_API_KEY, GITHUB_TOKEN, ...) the sandboxed code must not
         # see or exfiltrate. Pass a minimal, secret-free environment instead.
+        # HOME is the real user home, not the launch dir: toolchains resolve
+        # their caches relative to HOME (Go: ~/go, ~/Library/Caches/go-build;
+        # Rust: ~/.cargo; ...), and the SBPL profile -- not HOME -- is the
+        # fence that keeps secrets (~/.ssh, ~/.aws, ...) unreadable.
         return {
             "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
-            "HOME": str(self._launch),
+            "HOME": str(Path.home()),
             # TMPDIR inside the launch dir (a writable area); created lazily by
             # the sandboxed command itself, not by the provider process.
             "TMPDIR": str(self._launch / ".tmp"),
@@ -468,10 +546,12 @@ class SeatbeltSandbox(BaseSandbox):
     def _profile_text(self) -> str:
         launch = str(self._launch)
         read_allows = _read_allow_block(launch, self._read_paths)
+        write_allows = _write_allow_block()
         ancestor_metadata = _ancestor_metadata_rules(launch)
         header = _PROFILE_HEADER.format(
             launch=launch,
             read_allows=read_allows,
+            write_allows=write_allows,
             ancestor_metadata=ancestor_metadata,
         )
         network_rule = "(allow network*)" if self._network else "(deny network*)"

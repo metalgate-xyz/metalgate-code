@@ -1,11 +1,17 @@
 {
-  "name": "evroc-extensions",
+  "name": "metalgate-extensions",
   "plugins": [
     {
       "name": "dynamic_tools",
       "source": "./plugins/dynamic_tools",
       "description": "Dynamically loads .py tool files from .metalgate/tools (current project root + agent project root) and registers their callables as model tools. Exposes write_tool_file, reload_dynamic_tools, and list_dynamic_tools.",
-      "author": "evroc"
+      "author": "metalgate"
+    },
+    {
+      "name": "context_tools",
+      "source": "./plugins/context_tools",
+      "description": "Real-time contextual symbol search for Go and Python: goto_definition, get_file_outline, get_source, get_callers, get_callees, find_symbol. Backed by ty (Python) and gopls (Go) language servers and tree-sitter.",
+      "author": "metalgate"
     }
   ]
 }

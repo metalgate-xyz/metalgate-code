@@ -9,6 +9,10 @@ dependencies = [
     "evroc",
     "dcode-seatbelt-sandbox",
     "dcode-bubblewrap-sandbox",
+    "tree-sitter",
+    "tree-sitter-python",
+    "tree-sitter-go",
+    "ty>=0.0.80",
 ]
 
 [tool.uv.sources]
@@ -22,7 +26,6 @@ dev = [
     "pytest-asyncio>=1.4.0",
     "ruff>=0.16.5",
     "shellcheck-py>=0.11.0.1",
-    "ty>=0.0.77",
 ]
 
 [tool.pytest.ini_options]
@@ -30,6 +33,7 @@ asyncio_mode = "auto"
 addopts = "--import-mode=importlib"
 testpaths = [
     "marketplace/plugins/dynamic_tools/tests",
+    "marketplace/plugins/context_tools/tests",
     "seatbelt-sandbox/tests",
     "bubblewrap-sandbox/tests",
 ]

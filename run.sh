@@ -92,7 +92,8 @@ fi
 # --- Marketplace + plugin (both commands are idempotent) --------------------
 MARKETPLACE_DIR="${SCRIPT_DIR}/marketplace"
 uv --project "${SCRIPT_DIR}" run dcode plugin marketplace add "${MARKETPLACE_DIR}" >/dev/null
-uv --project "${SCRIPT_DIR}" run dcode plugin install "dynamic_tools@evroc-extensions" >/dev/null
+uv --project "${SCRIPT_DIR}" run dcode plugin install "dynamic_tools@metalgate-extensions" >/dev/null
+uv --project "${SCRIPT_DIR}" run dcode plugin install "context_tools@metalgate-extensions" >/dev/null
 
 # --- Launch -----------------------------------------------------------------
 # `${SANDBOX_ARGS[@]+"${SANDBOX_ARGS[@]}"}` is the bash-3.2-safe empty-array

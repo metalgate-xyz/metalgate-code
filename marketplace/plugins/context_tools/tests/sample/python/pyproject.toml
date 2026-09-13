@@ -1,0 +1,9 @@
+[project]
+name = "test"
+version = "0.0.0"
+dependencies = [
+    "requests",
+]
+
+[tool.setuptools]
+py-modules = ["orders", "utils", "validation"]

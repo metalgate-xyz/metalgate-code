@@ -129,10 +129,12 @@ _TOOL_READ_PATHS = (
     # VCS
     ".gitconfig",
     ".config/git",
-    # Python (uv-managed toolchain, pip cache)
+    # Python (uv-managed toolchain, pip cache). uv's cache is read while
+    # resolving/extracting wheels and building the sdist index.
     ".local/share/uv",
     ".local/bin",
     ".cache/pip",
+    ".cache/uv",
     # Node
     ".npmrc",
     ".local/lib/node_modules",
@@ -143,6 +145,28 @@ _TOOL_READ_PATHS = (
     # Go
     ".cache/go-build",
     "go",
+    "go.work",
+    ".cache/gopls",
+)
+
+
+# Toolchain cache subpaths under $HOME that a coding sandbox must WRITE to.
+# Compilers and language servers (gopls, rust-analyzer) build metadata into
+# these caches; a read-only bind breaks type checking and go-to-definition
+# even though the source is readable. Each entry is a relative path resolved
+# against $HOME; nonexistent ones are skipped at argv-build time. Symmetric to
+# `_TOOL_READ_PATHS`.
+_TOOL_WRITE_PATHS = (
+    # Go: gopls writes compiled package metadata to the build cache. Without
+    # write access it can't load views, so textDocument/definition returns null.
+    ".cache/go-build",
+    # gopls's own cache (typerefs, export data, diagnostics). Without write
+    # access gopls logs errors on every request and degrades.
+    ".cache/gopls",
+    # uv: writes downloaded wheels and the sdist git index (sdists-v9/.git)
+    # here; a read-only cache makes installs fail with "Operation not
+    # permitted" on the .git index.
+    ".cache/uv",
 )
 
 
@@ -214,6 +238,22 @@ def _tool_read_paths() -> list[str]:
     home = Path.home()
     out: list[str] = []
     for rel in _TOOL_READ_PATHS:
+        resolved = (home / rel).expanduser()
+        if not resolved.exists():
+            continue
+        out.append(str(resolved.resolve()))
+    return out
+
+
+def _tool_write_paths() -> list[str]:
+    """Resolve `_TOOL_WRITE_PATHS` against $HOME, returning existing paths.
+
+    Same skip rule as `_tool_read_paths`: nonexistent paths are dropped (a
+    tool not installed generates no cache to write).
+    """
+    home = Path.home()
+    out: list[str] = []
+    for rel in _TOOL_WRITE_PATHS:
         resolved = (home / rel).expanduser()
         if not resolved.exists():
             continue
@@ -348,12 +388,13 @@ class BubblewrapSandbox(BaseSandbox):
         # Don't inherit dcode's environment: it typically carries API keys and
         # tokens (OPENAI_API_KEY, GITHUB_TOKEN, ...) the sandboxed code must not
         # see or exfiltrate. Pass a minimal, secret-free environment instead.
-        # HOME points at the launch dir (the writable area), mirroring the
-        # seatbelt provider: the sandbox's "home" is the project, and the real
-        # home's secrets are not mounted at all.
+        # HOME is the real user home, not the launch dir: toolchains resolve
+        # their caches relative to HOME (Go: ~/go, ~/.cache/go-build; Rust:
+        # ~/.cargo; ...), and the mount namespace -- not HOME -- is the fence
+        # that keeps secrets (~/.ssh, ~/.aws, ...) invisible (unmounted).
         return {
             "PATH": "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/snap/bin",
-            "HOME": str(self._launch),
+            "HOME": str(Path.home()),
             # TMPDIR inside the launch dir (a writable area); created lazily by
             # the sandboxed command itself, not by the provider process.
             "TMPDIR": str(self._launch / ".tmp"),
@@ -426,6 +467,12 @@ class BubblewrapSandbox(BaseSandbox):
             bound.add(dst)
         argv += ["--proc", "/proc", "--dev", "/dev"]
         bound.update({"/proc", "/dev"})
+        # A writable /tmp: Go's toolchain (`go list`, `go build`) creates temp
+        # work dirs under /tmp (via /tmp, not TMPDIR). Without a writable /tmp
+        # package loading fails with "mkdir /tmp/go-build*: operation not
+        # permitted".
+        argv += ["--tmpfs", "/tmp"]
+        bound.add("/tmp")
 
         # --- Launch dir (read/write) ---------------------------------------
         # Bind the launch dir at its real path, read-write, so the agent
@@ -452,6 +499,18 @@ class BubblewrapSandbox(BaseSandbox):
         for p in _tool_read_paths():
             argv += _bind_ancestor_args(p, bound)
             argv += ["--ro-bind-try", p, p]
+            bound.add(p)
+
+        # --- Curated tool write paths under $HOME (read/write) -------------
+        # Compilers and language servers (gopls, rust-analyzer) build metadata
+        # into these caches; a read-only bind breaks type checking and
+        # go-to-definition even though the source is readable. Bound
+        # read-write at their real paths. Ancestors are pre-created read-only
+        # (0555) so only the cache dir itself is writable, mirroring the
+        # read-only tool path handling above.
+        for p in _tool_write_paths():
+            argv += _bind_ancestor_args(p, bound)
+            argv += ["--bind", p, p]
             bound.add(p)
 
         # --- User read_paths (read-only) -----------------------------------

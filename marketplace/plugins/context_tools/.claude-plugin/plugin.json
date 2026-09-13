@@ -1,0 +1,11 @@
+{
+  "name": "context_tools",
+  "version": "0.1.5",
+  "displayName": "Context Tools",
+  "description": "Real-time contextual symbol search for Go and Python: goto_definition, get_file_outline, get_source, get_callers, get_callees, find_symbol, set_language_server_root. Backed by ty (Python) and gopls (Go) language servers and tree-sitter.",
+  "extensions": {
+    "com.langchain.deepagents.code": {
+      "pythonExtensions": "./extension/__init__.py"
+    }
+  }
+}
