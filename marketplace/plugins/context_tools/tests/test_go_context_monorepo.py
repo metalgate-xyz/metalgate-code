@@ -54,7 +54,9 @@ def tools(tmp_path_factory):
     )
     CONTROLLER_FILE = str(sample_dir / "private" / "service" / "api" / "controller.go")
     MIDDLEWARE_FILE = str(sample_dir / "private" / "service" / "api" / "middleware.go")
-    RENDER_CALL_FILE = str(sample_dir / "private" / "service" / "api" / "render_call.go")
+    RENDER_CALL_FILE = str(
+        sample_dir / "private" / "service" / "api" / "render_call.go"
+    )
     GIN_CALL_FILE = str(sample_dir / "private" / "service" / "api" / "gin_call.go")
     CLOSURE_FILE = str(sample_dir / "private" / "service" / "api" / "closure.go")
     CLIENT_FILE = str(sample_dir / "public" / "client" / "client.go")
@@ -1032,9 +1034,7 @@ class TestGetCalleesCrossPackage:
         callees = tools["get_callees"](CONTROLLER_FILE, line)
         tc = next((c for c in callees if c["name"] == "ToContext"), None)
         assert tc is not None, "ToContext not in callees"
-        assert tc["kind"] == "function", (
-            f"expected kind 'function', got {tc['kind']!r}"
-        )
+        assert tc["kind"] == "function", f"expected kind 'function', got {tc['kind']!r}"
 
     def test_callees_have_required_keys(self, tools):
         """Every callee dict must have name, kind, file, line, signature."""
@@ -1080,9 +1080,7 @@ class TestGetCalleesSamePackage:
             f"expected controller.go, got {pub['file']}"
         )
         assert pub["line"] == 16, f"expected line 16, got {pub['line']}"
-        assert pub["kind"] == "method", (
-            f"expected kind 'method', got {pub['kind']!r}"
-        )
+        assert pub["kind"] == "method", f"expected kind 'method', got {pub['kind']!r}"
 
 
 # get_callers — cross-package + same-package + e2e
@@ -1176,9 +1174,7 @@ class TestGetCallers:
         self_refs = [
             c for c in callers if c["file"] == CONTROLLER_FILE and c["line"] == line
         ]
-        assert self_refs == [], (
-            f"definition line leaked into callers: {self_refs!r}"
-        )
+        assert self_refs == [], f"definition line leaked into callers: {self_refs!r}"
 
     def test_caller_name_is_the_symbol(self, tools):
         """The `name` field of each caller result is the referenced symbol
@@ -1186,9 +1182,7 @@ class TestGetCallers:
         line = self._publish_line(tools)
         callers = tools["get_callers"](CONTROLLER_FILE, line)
         for c in callers:
-            assert c["name"] == "Publish", (
-                f"expected name 'Publish', got {c['name']!r}"
-            )
+            assert c["name"] == "Publish", f"expected name 'Publish', got {c['name']!r}"
 
     def test_unused_func_has_no_callers(self, tools):
         """UnusedFunc (context.go) is never called — its callers list must

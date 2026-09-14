@@ -819,9 +819,7 @@ class TestGetCallees:
         callees = tools["get_callees"](ORDERS_FILE, line)
         va = next((c for c in callees if c["name"] == "ValidateAddress"), None)
         assert va is not None, "ValidateAddress not in callees"
-        assert va["kind"] == "function", (
-            f"expected kind 'function', got {va['kind']!r}"
-        )
+        assert va["kind"] == "function", f"expected kind 'function', got {va['kind']!r}"
 
     def test_no_callees_for_leaf_function(self, tools):
         """FormatCurrency (utils.go:6) only calls fmt.Sprintf (stdlib, outside
@@ -884,16 +882,12 @@ class TestGetCallers:
         at main.go line 7."""
         line = self._process_line(tools)
         callers = tools["get_callers"](ORDERS_FILE, line)
-        main_caller = next(
-            (c for c in callers if c.get("caller") == "main"), None
-        )
+        main_caller = next((c for c in callers if c.get("caller") == "main"), None)
         assert main_caller is not None, "main not among callers"
         assert self._basename(main_caller["file"]) == "main.go", (
             f"expected main.go, got {main_caller['file']}"
         )
-        assert main_caller["line"] == 7, (
-            f"expected line 7, got {main_caller['line']}"
-        )
+        assert main_caller["line"] == 7, f"expected line 7, got {main_caller['line']}"
 
     def test_callers_have_required_keys(self, tools):
         """Every caller dict must have file, line, name, caller, context."""
@@ -912,9 +906,7 @@ class TestGetCallers:
         self_refs = [
             c for c in callers if c["file"] == ORDERS_FILE and c["line"] == line
         ]
-        assert self_refs == [], (
-            f"definition line leaked into callers: {self_refs!r}"
-        )
+        assert self_refs == [], f"definition line leaked into callers: {self_refs!r}"
 
     def test_caller_name_is_the_symbol(self, tools):
         """The `name` field of each caller result is the referenced symbol
@@ -922,9 +914,7 @@ class TestGetCallers:
         line = self._process_line(tools)
         callers = tools["get_callers"](ORDERS_FILE, line)
         for c in callers:
-            assert c["name"] == "Process", (
-                f"expected name 'Process', got {c['name']!r}"
-            )
+            assert c["name"] == "Process", f"expected name 'Process', got {c['name']!r}"
 
     def test_unused_func_has_no_callers(self, tools):
         """UnusedFunc (orders.go) is never called — its callers list must be

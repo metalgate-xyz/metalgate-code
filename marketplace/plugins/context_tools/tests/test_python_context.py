@@ -369,9 +369,7 @@ class TestCodeCacheRootKeying:
 
         cache = CodeCache(str(tmp_path / "cache.db"))
         cache.set_symbol("/root/A", "foo", [{"name": "foo", "file": "a.py"}])
-        assert cache.get_symbol("/root/A", "foo") == [
-            {"name": "foo", "file": "a.py"}
-        ]
+        assert cache.get_symbol("/root/A", "foo") == [{"name": "foo", "file": "a.py"}]
         assert cache.get_symbol("/root/B", "foo") is None
 
     def test_symbol_miss_returns_none(self, tmp_path):
@@ -899,7 +897,10 @@ class TestRelativePaths:
         for fn, args in (
             (tools["get_file_outline"], (Path(ORDERS_FILE).name,)),
             (tools["get_source"], (Path(VALIDATION_FILE).name, 1)),
-            (tools["goto_definition"], (Path(ORDERS_FILE).name, 14, "validate_address")),
+            (
+                tools["goto_definition"],
+                (Path(ORDERS_FILE).name, 14, "validate_address"),
+            ),
             (tools["get_callers"], (Path(VALIDATION_FILE).name, 1)),
             (tools["get_callees"], (Path(ORDERS_FILE).name, 1)),
         ):
