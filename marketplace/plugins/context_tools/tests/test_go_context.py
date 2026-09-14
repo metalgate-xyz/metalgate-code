@@ -39,7 +39,9 @@ from pathlib import Path
 
 import pytest
 
-from marketplace.plugins.context_tools.extension import get_code_tools
+from marketplace.plugins.context_tools.extension.cache import CodeCache
+from marketplace.plugins.context_tools.extension.factory import _create_tracer
+from marketplace.plugins.context_tools.extension.tools import make_tools
 
 # Source-of-truth sample in the repo; the module fixture copies it to a temp
 # dir and rebinds these globals to the copy so the tracer's cache (.metalgate/)
@@ -69,7 +71,10 @@ def tools(tmp_path_factory):
     MULTISELECTOR_FILE = str(sample_dir / "multiselector.go")
     EXTERNAL_FILE = str(sample_dir / "external.go")
 
-    tool_list = get_code_tools(cwd=str(sample_dir), language="go")
+    cache_path = str(sample_dir / ".metalgate" / "context_cache.db")
+    Path(cache_path).parent.mkdir(parents=True, exist_ok=True)
+    cache = CodeCache(cache_path)
+    tracer = _create_tracer(root=str(sample_dir), cache=cache, language="go")
     (
         goto_def,
         outline,
@@ -78,17 +83,21 @@ def tools(tmp_path_factory):
         callees,
         find_sym,
         set_root,
-    ) = tool_list
+    ) = make_tools(tracer)
 
-    yield {
-        "goto_definition": goto_def,
-        "get_file_outline": outline,
-        "get_source": get_source,
-        "get_callers": callers,
-        "get_callees": callees,
-        "find_symbol": find_sym,
-        "set_language_server_root": set_root,
-    }
+    try:
+        yield {
+            "goto_definition": goto_def,
+            "get_file_outline": outline,
+            "get_source": get_source,
+            "get_callers": callers,
+            "get_callees": callees,
+            "find_symbol": find_sym,
+            "set_language_server_root": set_root,
+            "cache": cache,
+        }
+    finally:
+        tracer.stop()
 
 
 # get_file_outline
@@ -1171,3 +1180,52 @@ class TestSetLanguageServerRootRestartsGopls:
         finally:
             GoplsLspClient.start = original_start
             tracer.stop()
+
+
+# set_language_server_root rebuilds gopls at the new root
+#
+# Exercises the public set_language_server_root tool wrapper (the closure
+# registered by make_tools), not tracer.set_root directly — covering the tool
+# surface end to end. Re-rooting to a directory that does not contain the
+# sample symbols makes them unreachable; clearing the root-keyed symbol cache
+# and steering back makes them reachable again, proving the server genuinely
+# rebuilds against the new root rather than the call being a no-op.
+class TestSetLanguageServerRoot:
+    """Steering the language server root rebuilds it at the new directory."""
+
+    def test_changes_root_and_rebuilds_server(self, tools, tmp_path):
+        # find_symbol works at the default SAMPLE root.
+        before = tools["find_symbol"]("ValidateAddress")
+        assert any(r["name"] == "ValidateAddress" and r.get("file") for r in before)
+
+        # Steer at an empty directory: no .go files, so the symbol must not
+        # be found. gopls needs a go.mod to index a module, so drop a
+        # minimal one in the temp root.
+        other = tmp_path / "other"
+        other.mkdir()
+        (other / "go.mod").write_text("module example.com/other\n\ngo 1.26.5\n")
+        result = tools["set_language_server_root"](str(other))
+        assert result["root"] == str(other)
+        assert result["previous"] == str(SAMPLE_DIR)
+
+        away = tools["find_symbol"]("ValidateAddress")
+        # A real hit carries the symbol's file path; assert on that so the
+        # check is uniform with the Python suite (whose "no symbols" hint
+        # echoes the query name).
+        assert not any(r.get("file") for r in away), (
+            "ValidateAddress should not be found after steering at an empty "
+            "root — the server did not rebuild against the new directory"
+        )
+
+        # Clear the root-keyed symbol cache so the next find_symbol must
+        # re-query the rebuilt server instead of returning the cached hit.
+        tools["cache"].clear_symbols()
+
+        # Steering back to the sample root rebuilds the server there and
+        # makes the symbol reachable again.
+        tools["set_language_server_root"](str(SAMPLE_DIR))
+        back = tools["find_symbol"]("ValidateAddress")
+        assert any(r["name"] == "ValidateAddress" and r.get("file") for r in back), (
+            "ValidateAddress should be found again after steering back — "
+            "the server did not rebuild against the restored root"
+        )

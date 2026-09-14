@@ -184,6 +184,29 @@ class CodeCache:
         )
         self._conn().commit()
 
+    # cache clearing
+
+    def clear_outlines(self) -> None:
+        """Remove every cached tree-sitter outline."""
+        self._conn().execute("DELETE FROM outlines")
+        self._conn().commit()
+
+    def clear_definitions(self) -> None:
+        """Remove every cached LSP definition resolution."""
+        self._conn().execute("DELETE FROM definitions")
+        self._conn().commit()
+
+    def clear_symbols(self) -> None:
+        """Remove every cached find_symbol result."""
+        self._conn().execute("DELETE FROM symbols")
+        self._conn().commit()
+
+    def clear_cache(self) -> None:
+        """Clear all caches: outlines, definitions, and symbols."""
+        self.clear_outlines()
+        self.clear_definitions()
+        self.clear_symbols()
+
 
 # Sentinel to distinguish "cached as None (miss)" from "not in cache"
 class _CacheMiss:

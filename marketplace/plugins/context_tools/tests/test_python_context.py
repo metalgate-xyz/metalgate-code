@@ -11,7 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from marketplace.plugins.context_tools.extension import get_code_tools
+from marketplace.plugins.context_tools.extension.cache import CodeCache
+from marketplace.plugins.context_tools.extension.factory import _create_tracer
 from marketplace.plugins.context_tools.extension.python_tracer import (
     _lsp_symbol_kind_to_str,
     _name_col_on_line,
@@ -23,6 +24,7 @@ from marketplace.plugins.context_tools.extension.python_tracer import (
     _ts_is_stub_function,
     _uri_to_path,
 )
+from marketplace.plugins.context_tools.extension.tools import make_tools
 
 SAMPLE_DIR = Path(__file__).parent / "sample" / "python"
 ORDERS_FILE = str(SAMPLE_DIR / "orders.py")
@@ -36,10 +38,8 @@ def tools():
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = f.name
 
-    tool_list = get_code_tools(
-        cwd=str(SAMPLE_DIR),
-        cache_path=db_path,
-    )
+    cache = CodeCache(db_path)
+    tracer = _create_tracer(root=str(SAMPLE_DIR), cache=cache)
     (
         goto_def,
         outline,
@@ -48,17 +48,21 @@ def tools():
         callees,
         find_sym,
         set_root,
-    ) = tool_list
+    ) = make_tools(tracer)
 
-    yield {
-        "goto_definition": goto_def,
-        "get_file_outline": outline,
-        "get_source": get_source,
-        "get_callers": callers,
-        "get_callees": callees,
-        "find_symbol": find_sym,
-        "set_language_server_root": set_root,
-    }
+    try:
+        yield {
+            "goto_definition": goto_def,
+            "get_file_outline": outline,
+            "get_source": get_source,
+            "get_callers": callers,
+            "get_callees": callees,
+            "find_symbol": find_sym,
+            "set_language_server_root": set_root,
+            "cache": cache,
+        }
+    finally:
+        tracer.stop()
 
 
 # get_file_outline
@@ -291,18 +295,52 @@ class TestFindSymbol:
 
 
 class TestSetLanguageServerRoot:
-    """Steering the language server root rebuilds it at the new directory."""
+    """Steering the language server root rebuilds it at the new directory.
 
-    def test_changes_root_and_rebuilds_server(self, tools):
+    Re-rooting to a directory that does not contain the sample symbols makes
+    them unreachable; clearing the root-keyed symbol cache and steering back
+    makes them reachable again — proving set_language_server_root genuinely
+    rebuilds the server against the new root rather than being a no-op.
+    """
+
+    def test_changes_root_and_rebuilds_server(self, tools, tmp_path):
         # find_symbol works at the default SAMPLE root.
         before = tools["find_symbol"]("validate_address")
-        assert any(r["name"] == "validate_address" for r in before)
+        assert any(r["name"] == "validate_address" and r.get("file") for r in before)
 
-        # Steering at the same directory rebuilds the server and keeps
-        # symbols reachable.
+        # Steer at an empty directory: no Python files, so the symbol must
+        # not be found. ty needs a pyproject.toml to discover modules, so
+        # drop a minimal one in the temp root.
+        other = tmp_path / "other"
+        other.mkdir()
+        (other / "pyproject.toml").write_text(
+            '[project]\nname = "other"\nversion = "0.0.0"\n'
+        )
+        result = tools["set_language_server_root"](str(other))
+        assert result["root"] == str(other)
+        assert result["previous"] == str(SAMPLE_DIR)
+
+        away = tools["find_symbol"]("validate_address")
+        # A real hit carries the symbol's file path; the "no symbols" hint
+        # entry echoes the query name with an empty file, so assert on that
+        # to keep the check uniform with the Go suites.
+        assert not any(r.get("file") for r in away), (
+            "validate_address should not be found after steering at an empty "
+            "root — the server did not rebuild against the new directory"
+        )
+
+        # Clear the root-keyed symbol cache so the next find_symbol must
+        # re-query the rebuilt server instead of returning the cached hit.
+        tools["cache"].clear_symbols()
+
+        # Steering back to the sample root rebuilds the server there and
+        # makes the symbol reachable again.
         tools["set_language_server_root"](str(SAMPLE_DIR))
-        after = tools["find_symbol"]("validate_address")
-        assert any(r["name"] == "validate_address" for r in after)
+        back = tools["find_symbol"]("validate_address")
+        assert any(r["name"] == "validate_address" and r.get("file") for r in back), (
+            "validate_address should be found again after steering back — "
+            "the server did not rebuild against the restored root"
+        )
 
 
 # CodeCache schema: root-keyed tables
