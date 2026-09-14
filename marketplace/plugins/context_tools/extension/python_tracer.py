@@ -585,8 +585,14 @@ class PythonTracer(Tracer):
         then resolves each to its definition via LSP textDocument/definition.
         Stdlib/builtins are filtered out.  Results are deduplicated by name,
         preferring concrete implementations over abstract stubs.
+        Results are cached.
         """
         file = self._resolve_path(file)
+        root = str(self.root)
+        cached = self.cache.get_callees(root, file, line)
+        if cached is not None:
+            return cached
+
         try:
             source = self._read_file(file)
         except OSError:
@@ -676,7 +682,12 @@ class PythonTracer(Tracer):
                     )
 
         # Deduplicate by name, preferring concrete over stub implementations.
-        return self._dedup_callees(results)
+        results = self._dedup_callees(results)
+        # Cache real (non-empty) hits only; an empty list can come from a
+        # transient LSP outage and shouldn't be pinned until the file edits.
+        if results:
+            self.cache.set_callees(root, file, line, results)
+        return results
 
     def _dedup_callees(self, results: list[dict]) -> list[dict]:
         """Deduplicate callees by name, preferring concrete over stub implementations.

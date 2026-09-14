@@ -548,8 +548,14 @@ class GoTracer(Tracer):
         Uses tree-sitter to find call positions within the function body,
         then resolves each to its definition via LSP textDocument/definition.
         Results are deduplicated by (file, line).
+        Results are cached.
         """
         file = self._resolve_path(file)
+        root = str(self.root)
+        cached = self.cache.get_callees(root, file, line)
+        if cached is not None:
+            return cached
+
         try:
             source = self._read_file(file)
         except OSError:
@@ -666,6 +672,10 @@ class GoTracer(Tracer):
                         }
                     )
 
+        # Cache real (non-empty) hits only; an empty list can come from a
+        # transient LSP outage and shouldn't be pinned until the file edits.
+        if results:
+            self.cache.set_callees(root, file, line, results)
         return results
 
     def find_symbol(self, name: str) -> list[dict]:
@@ -686,9 +696,7 @@ class GoTracer(Tracer):
             return results
         return self._find_symbol_ts(name)
 
-    def _find_symbol_lsp(
-        self, name: str, *, scoped: bool = True
-    ) -> list[dict] | None:
+    def _find_symbol_lsp(self, name: str, *, scoped: bool = True) -> list[dict] | None:
         """LSP-based symbol search, or None if gopls is unavailable.
 
         Results are filtered to exact, case-insensitive name matches.

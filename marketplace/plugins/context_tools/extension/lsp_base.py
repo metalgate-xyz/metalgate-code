@@ -163,7 +163,10 @@ class LspBaseClient:
             "processId": 0,
             "rootUri": self._root_uri,
             "workspaceFolders": [
-                {"uri": self._root_uri, "name": os.path.basename(root_path) or root_path}
+                {
+                    "uri": self._root_uri,
+                    "name": os.path.basename(root_path) or root_path,
+                }
             ],
             "capabilities": {},
         }

@@ -145,6 +145,8 @@ def make_tools(tracer: Tracer) -> list:
 
         This is the primary tool for following a call trail deeper into the
         codebase.  Pair with get_source to read the body of each callee.
+        Expensive on the first call (one LSP round-trip per call site);
+        cached after that, keyed by file mtime.
 
         Results are deduplicated by name: when the same method appears via
         both an abstract declaration and a concrete implementation, only the
