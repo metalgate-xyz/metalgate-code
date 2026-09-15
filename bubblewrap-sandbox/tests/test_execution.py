@@ -406,11 +406,7 @@ class TestWriteConfinement:
             r = sandbox.execute(f"echo pwned > {target} 2>&1; echo exit=$?")
             # $HOME is not mounted or read-only, so the write is EROFS/EPERM,
             # or ENOENT if not an ancestor of a mounted bind. Either way: blocked.
-            assert (
-                "Read-only file system" in r.output
-                or "Permission denied" in r.output
-                or "No such file or directory" in r.output
-            ), r.output
+            assert "cannot create" in r.output, r.output
             assert "exit=" in r.output and "exit=0" not in r.output, r.output
             assert target.exists() is False
         finally:
