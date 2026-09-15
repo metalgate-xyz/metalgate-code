@@ -1,14 +1,11 @@
-"""End-to-end test: boot dcode under the bubblewrap sandbox and verify it fences.
+"""End-to-end: boot dcode under the bubblewrap sandbox and verify it fences.
 
-Unlike the unit tests (which call the provider directly), this exercises the
-full dcode stack via ``run.sh``: the server graph boots on the langgraph event
-loop, the bubblewrap provider's blocking ``get_or_create`` runs there, and the
-agent's tool calls route through the sandbox-backed file tools. The agent is
-asked to (a) write and read back a file in the project (proves the launch dir
-is the read/write area and the sandbox booted), and (b) attempt to read a path
-the bubblewrap fence should block (``~/.ssh``). If the sandbox failed to boot,
-dcode falls back to the local filesystem backend, which CAN read ``~/.ssh`` --
-so the fence probe distinguishes "sandbox working" from "sandbox absent".
+Exercises the full dcode stack via ``run.sh``: the server graph boots, the
+bubblewrap provider's blocking ``get_or_create`` runs on the langgraph event
+loop, and the agent's tool calls route through the sandbox-backed file tools.
+The agent writes+reads a file in the project (proves the launch dir is the
+read/write area and the sandbox booted) and attempts to read a file the
+bubblewrap fence should block.
 
 Requires ``EVROC_API_KEY`` (sourced from ``~/.metalgate/.env`` by ``run.sh``).
 Skipped when the key is absent, off Linux, or when ``bwrap`` is missing.
@@ -21,6 +18,7 @@ import os
 import shutil
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 
 import pytest
@@ -48,13 +46,7 @@ pytestmark = pytest.mark.skipif(
 
 
 def _run_headless(prompt: str) -> str:
-    """Run dcode headless via run.sh and return the agent's final answer.
-
-    The bubblewrap sandbox is selected by setting DCODE_SANDBOX=bubblewrap (the
-    run.sh platform gate only auto-selects seatbelt on macOS); on Linux we
-    force the sandbox explicitly. ``-n`` submits the prompt non-interactively;
-    ``--no-stream`` buffers the full response; ``-q`` keeps the output clean.
-    """
+    """Run dcode headless via run.sh and return the agent's final answer."""
     assert _RUN_SH.is_file(), f"run.sh not found at {_RUN_SH}"
     env = dict(os.environ)
     env["DCODE_SANDBOX"] = "bubblewrap"
@@ -73,29 +65,25 @@ def _run_headless(prompt: str) -> str:
 def test_bubblewrap_sandbox_boots_and_fences() -> None:
     """The sandbox must boot, read/write the launch dir, and fence $HOME.
 
-    The agent is asked to (1) create a marker file in the project and read it
-    back -- proves the launch dir is writable/readable inside the sandbox and
-    the sandbox booted (no backend = no file ops at all); (2) try to read a
-    junk marker file placed in the home directory OUTSIDE the launch dir.
-    Under bubblewrap the home path is not mounted, so the read fails with
-    "No such file or directory"; if the sandbox failed to boot, dcode falls
-    back to the local filesystem backend and the home file is readable -- so
-    this probe distinguishes a working sandbox from an absent one, which a
-    plain round-trip cannot. The home marker is a non-sensitive junk file,
-    not a real dotfile.
+    The agent (1) creates a marker file in the project and reads it back:
+    proves the launch dir is writable/readable and the sandbox booted; (2)
+    tries to read a junk marker placed under ``$HOME`` outside the launch dir,
+    which bubblewrap must block (the home path is not mounted).
     """
     target = _PROJECT_ROOT / "e2e_marker.txt"
     if target.exists():  # leftover from a prior run
         target.unlink()
-    # Non-sensitive junk file in the home root (outside the launch dir) that
-    # bubblewrap should fence. Created by the test, not a real dotfile.
-    home_marker = Path.home() / f".bwrap-e2e-{os.getpid()}"
+    # Throwaway directory under $HOME (outside the launch dir) to probe the fence.
+    outside_dir = (
+        Path.home().resolve() / f".dcode-sandbox-e2e-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    )
     try:
-        home_marker.write_text("fence-probe")
+        outside_dir.mkdir(parents=True, exist_ok=True)
     except (PermissionError, OSError) as exc:
-        # $HOME may be read-only when pytest itself runs sandboxed, so the
-        # host-side marker can't be created -- skip rather than fail.
-        pytest.skip(f"cannot create host marker outside launch dir: {exc}")
+        # $HOME may be read-only when pytest itself runs sandboxed.
+        pytest.skip(f"cannot create ad hoc dir under $HOME: {exc}")
+    home_marker = outside_dir / "fence-probe.txt"
+    home_marker.write_text("fence-probe")
     try:
         prompt = (
             f"Do these two things and report both results:\n"
@@ -114,16 +102,11 @@ def test_bubblewrap_sandbox_boots_and_fences() -> None:
         assert _FILE_MARKER in target.read_text(), (
             f"file contents wrong; answer was:\n{answer}"
         )
-        # The bubblewrap fence must block the home marker. If the sandbox
-        # failed to boot, dcode falls back to the local FS backend and the
-        # home file is readable -- so "denied" here is the real proof the
-        # sandbox is active.
+        # The bubblewrap fence must block the home marker.
         assert "FENCE_DENIED" in answer, (
-            f"home marker was not fenced (sandbox may not be active or fence "
-            f"has a hole). Answer was:\n{answer}"
+            f"home marker was not fenced. Answer was:\n{answer}"
         )
     finally:
         with contextlib.suppress(FileNotFoundError):
             target.unlink()
-        with contextlib.suppress(FileNotFoundError):
-            home_marker.unlink()
+        shutil.rmtree(outside_dir, ignore_errors=True)

@@ -22,14 +22,12 @@ pytestmark = pytest.mark.skipif(
     reason="bubblewrap tests require Linux",
 )
 
-# --- sandbox_id validation -------------------------------------------------
+# sandbox_id validation
 
 
 class TestIdValidation:
-    """`sandbox_id` is not used to name any on-disk artifact for bubblewrap
-    (no profile file, no per-sandbox workspace), so the charset regex is pure
-    API parity with the seatbelt provider and a friendly-error fast-fail -- not
-    a security boundary."""
+    """`sandbox_id` never reaches disk for bubblewrap (no profile/workspace),
+    so the regex is API parity + friendly error, not a security boundary."""
 
     @pytest.mark.parametrize(
         "bad",
@@ -65,7 +63,7 @@ class TestIdValidation:
             "my.project",
             "a",
             "A1-B2.c3",
-            "-n",  # leading dash -- safe: id is never a CLI arg
+            "-n",  # leading dash: safe, id is never a CLI arg
             ".hidden",
             "..",
         ],
@@ -74,13 +72,12 @@ class TestIdValidation:
         assert _ID_PATTERN.match(ok) is not None
 
 
-# --- _existing (read_paths normalizer) --------------------------------------
+# _existing (read_paths normalizer)
 
 
 class TestExisting:
-    """`_existing` drops nonexistent paths, resolves symlinks, and dedupes --
-    `bwrap --ro-bind` fails on a missing source, so `read_paths` that don't
-    exist must be filtered before reaching the argv."""
+    """`_existing` drops nonexistent paths, resolves symlinks, and dedupes:
+    `bwrap --ro-bind` fails on a missing source."""
 
     def test_drops_nonexistent(self, tmp_path: Path) -> None:
         real = tmp_path / "real"
@@ -114,12 +111,12 @@ class TestExisting:
         assert out == [str(d.resolve())]
 
 
-# --- _tool_read_paths -------------------------------------------------------
+# _tool_read_paths
 
 
 class TestToolReadPaths:
     """`_tool_read_paths` resolves `_TOOL_READ_PATHS` against $HOME and skips
-    nonexistent ones, so a tool not installed doesn't produce a failed bind."""
+    nonexistent entries."""
 
     def test_skips_nonexistent(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -141,21 +138,18 @@ class TestToolReadPaths:
     def test_includes_files(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        # A path that exists but is a file (e.g. ~/.gitconfig) is included --
-        # bwrap --ro-bind works on files, and .gitconfig/.npmrc are files the
-        # toolchain needs to read.
+        # A file (e.g. ~/.gitconfig) is included: bwrap --ro-bind works on files.
         monkeypatch.setenv("HOME", str(tmp_path))
         (tmp_path / ".gitconfig").write_text("[user]\n")
         out = _tool_read_paths()
         assert str((tmp_path / ".gitconfig").resolve()) in out
 
 
-# --- system ro-bind table ---------------------------------------------------
+# system ro-bind table
 
 
 class TestSystemRoBinds:
-    """The system bind table must mount the essentials read-only and keep DNS
-    working without exposing all of /run."""
+    """Mounts essentials read-only and exposes DNS without all of /run."""
 
     def test_usr_and_etc_are_hard_binds(self) -> None:
         binds = {src: try_ for src, _dst, try_ in _SYSTEM_RO_BINDS}
@@ -178,12 +172,11 @@ class TestSystemRoBinds:
         assert "/run" not in run_binds
 
 
-# --- BaseSandbox abstract surface ------------------------------------------
+# BaseSandbox abstract surface
 
 
 class TestBaseSandboxSurface:
-    """The abstract members must be implemented; derived methods
-    (ls/read/write/edit/delete/grep/glob) come from BaseSandbox."""
+    """Abstract members are implemented; derived methods come from BaseSandbox."""
 
     def test_sandbox_instantiates_and_has_abstract_members(
         self, tmp_path: Path
@@ -199,7 +192,7 @@ class TestBaseSandboxSurface:
             assert callable(getattr(sb, name)), name
 
 
-# --- argv construction (no bwrap needed) -----------------------------------
+# argv construction (no bwrap needed)
 
 
 class TestArgvConstruction:
@@ -284,11 +277,11 @@ class TestArgvConstruction:
         assert str(tmp_path / "nope") not in argv
 
 
-# --- environment scrubbing (no bwrap needed) --------------------------------
+# environment scrubbing (no bwrap needed)
 
 
 class TestEnvScrubbing:
-    """`_env` returns a minimal, secret-free environment -- dcode's own env
+    """`_env` returns a minimal, secret-free environment: dcode's own env
     (with API keys/tokens) is not inherited."""
 
     def test_minimal_env_only(self, tmp_path: Path) -> None:
@@ -299,7 +292,7 @@ class TestEnvScrubbing:
     def test_home_is_real_user_home(self, tmp_path: Path) -> None:
         # HOME is the real user home, not the launch dir: toolchains resolve
         # their caches relative to HOME (~/go, ~/.cargo, ~/.cache/...), and
-        # the mount namespace -- not HOME -- is the fence that keeps secrets
+        # the mount namespace, not HOME, is the fence that keeps secrets
         # (~/.ssh, ~/.aws, ...) invisible (unmounted). See provider._env.
         sb = BubblewrapSandbox("env-test", tmp_path)
         assert sb._env()["HOME"] == str(Path.home())
@@ -309,7 +302,7 @@ class TestEnvScrubbing:
         assert sb._env()["TMPDIR"] == str(tmp_path.resolve() / ".tmp")
 
 
-# --- provider id validation (no bwrap needed) ------------------------------
+# provider id validation (no bwrap needed)
 
 
 class TestProviderIdValidation:

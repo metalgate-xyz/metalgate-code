@@ -1,18 +1,13 @@
-"""Live `bwrap` tests -- run real commands under the bubblewrap sandbox.
+"""Live `bwrap` tests: run real commands under the bubblewrap sandbox.
 
-These require Linux and `bwrap` in PATH and unprivileged user namespaces
-enabled; they are skipped elsewhere. They cover the behavior that can only
-be verified by actually running a sandboxed process: the home-invisibility
-fence (paths outside the launch dir are absent, not merely denied),
-`read_paths` opt-in, environment scrubbing, the network default, the
-write fence, and that a process actually bootstraps.
+Require Linux + `bwrap` + unprivileged user namespaces; skipped elsewhere.
+Cover behavior only verifiable by running a sandboxed process: the
+home-invisibility fence, `read_paths` opt-in, env scrubbing, the network
+default, the write fence, and process bootstrap.
 
-Each sandbox's launch dir is whatever the provider resolves (from the
-server context env vars, falling back to the cwd) -- tests read it back
-from the sandbox itself instead of assuming a path derived from this
-file's location, so they pass regardless of the cwd pytest is invoked
-from. Each test uses a throwaway sandbox via the `sandbox` fixture;
-`delete()` is a no-op for bubblewrap (no on-disk artifacts).
+Each test uses a throwaway `sandbox` fixture; `delete()` is a no-op for
+bubblewrap. Fence probes use the ``outside_dir`` fixture (an ad hoc dir under
+``$HOME``).
 """
 
 from __future__ import annotations
@@ -23,6 +18,7 @@ import shlex
 import shutil
 import sys
 import threading
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -36,8 +32,9 @@ pytestmark = pytest.mark.skipif(
     reason="bubblewrap tests require Linux bwrap with unprivileged user namespaces",
 )
 
-WHO = os.environ.get("USER", "")
-HOME = str(Path.home())
+# Bubblewrap does not mount $HOME (except the launch dir and curated tool
+# paths), so a fenced host path is ENOENT inside the sandbox.
+FENCE_ERR = "No such file or directory"
 
 
 @pytest.fixture
@@ -49,56 +46,53 @@ def provider() -> BubblewrapProvider:
 def sandbox(provider: BubblewrapProvider, request):
     """A throwaway sandbox. `read_paths` can be set via indirect parametrization."""
     read_paths = getattr(request, "param", None)
-    raw = f"{os.getpid()}-{request.node.name}"
-    safe = "".join(c if c.isalnum() or c in "._-" else "-" for c in raw)
-    sb = provider.get_or_create(sandbox_id=f"pytest-{safe}", read_paths=read_paths)
+    sb = _make_sandbox(provider, request.node.name, read_paths)
     yield sb
     with contextlib.suppress(Exception):
         provider.delete(sandbox_id=sb.id)
 
 
-# --- the home invisibility fence -------------------------------------------
+@pytest.fixture
+def sandbox_with_test_paths(
+    provider: BubblewrapProvider, request, outside_dir: Path
+) -> Iterator[BubblewrapSandbox]:
+    """A throwaway sandbox with `outside_dir` bound as a read_path."""
+    sb = _make_sandbox(provider, request.node.name, [str(outside_dir)])
+    yield sb
+    with contextlib.suppress(Exception):
+        provider.delete(sandbox_id=sb.id)
 
 
-class TestHomeInvisibilityFence:
-    """By default, all of $HOME except the launch dir and curated tool paths is
-    not mounted, so it is simply absent (ENOENT), not merely permission-denied.
-    With read_paths, the listed subpaths are bound ro and become visible."""
+def _make_sandbox(
+    provider: BubblewrapProvider, node_name: str, read_paths: list[str] | None
+) -> BubblewrapSandbox:
+    raw = f"{os.getpid()}-{node_name}"
+    safe = "".join(c if c.isalnum() or c in "._-" else "-" for c in raw)
+    return provider.get_or_create(sandbox_id=f"pytest-{safe}", read_paths=read_paths)
+
+
+# the home fence
+
+
+class TestHomeFence:
+    """By default, $HOME except the launch dir and tool paths is unmounted
+    (ENOENT). `read_paths` binds listed subpaths read-only."""
 
     @pytest.mark.parametrize("sandbox", [None], indirect=True)
-    def test_home_secrets_absent(self, sandbox: BubblewrapSandbox) -> None:
-        # ~/.ssh is not mounted: ls reports "No such file or directory", not a
-        # permission error. This is the bubblewrap analog of seatbelt's
-        # "Operation not permitted" /Users fence.
-        r = sandbox.execute(f"ls {HOME}/.ssh 2>&1; echo exit=$?")
-        assert "No such file or directory" in r.output, r.output
-
-    @pytest.mark.parametrize("sandbox", [None], indirect=True)
-    def test_system_files_readable(self, sandbox: BubblewrapSandbox) -> None:
-        # /etc is bound ro -- system files stay readable.
-        r = sandbox.execute("head -c 10 /etc/hostname 2>&1; echo exit=$?")
-        assert r.exit_code == 0, r.output
-        assert r.output.strip() != "" or "exit=0" in r.output
-
-    @pytest.mark.parametrize("sandbox", [None], indirect=True)
-    def test_home_root_absent(self, sandbox: BubblewrapSandbox) -> None:
-        # $HOME is not mounted as a bind, but bwrap auto-creates its ancestor
-        # dirs (read-only, via --perms 0555 --dir) to hold the launch-dir and
-        # tool-path binds that live under it. So `ls $HOME` succeeds and shows
-        # a *sparse* home root -- only the bound subpaths -- not the full home.
-        # The meaningful fence assertion is that a secret subdir stays absent.
-        if str(sandbox._launch) == HOME:
-            pytest.skip("launch dir is $HOME; home root is mounted by definition")
-        r = sandbox.execute(f"ls {HOME}/.ssh 2>&1; echo exit=$?")
-        assert "No such file or directory" in r.output, r.output
+    def test_home_denied_by_default(
+        self, sandbox: BubblewrapSandbox, outside_dir: Path
+    ) -> None:
+        target = outside_dir / "marker.txt"
+        target.write_text("fence-probe")
+        r = sandbox.execute(f"cat {shlex.quote(str(target))} 2>&1; echo exit=$?")
+        assert FENCE_ERR in r.output, r.output
 
 
-# --- launch dir read/write -------------------------------------------------
+# launch dir read/write
 
 
 class TestLaunchDir:
-    """The launch dir is the read/write area: the agent reads and writes the
-    project with zero config."""
+    """The launch dir is the read/write area with zero config."""
 
     @pytest.mark.parametrize("sandbox", [None], indirect=True)
     def test_launch_dir_readable(self, sandbox: BubblewrapSandbox) -> None:
@@ -123,38 +117,44 @@ class TestLaunchDir:
                 target.unlink()
 
     @pytest.mark.parametrize("sandbox", [None], indirect=True)
-    def test_home_still_absent_when_launch_dir_allowed(
-        self, sandbox: BubblewrapSandbox
+    def test_home_still_denied_when_launch_dir_allowed(
+        self, sandbox: BubblewrapSandbox, outside_dir: Path
     ) -> None:
-        # The launch dir is mounted, but ~/.ssh stays absent.
-        if str(sandbox._launch) == HOME:
-            pytest.skip("launch dir is $HOME")
-        r = sandbox.execute(f"ls {HOME}/.ssh 2>&1; echo exit=$?")
-        assert "No such file or directory" in r.output, r.output
+        r = sandbox.execute(f"ls {shlex.quote(str(outside_dir))} 2>&1; echo exit=$?")
+        assert FENCE_ERR in r.output, r.output
 
 
-# --- read_paths opt-in ------------------------------------------------------
+# read_paths opt-in
 
 
 class TestReadPaths:
-    """`read_paths` adds extra readable bind mounts on top of the launch dir."""
+    """`read_paths` adds extra readable ro bind mounts."""
 
-    @pytest.mark.parametrize("sandbox", [[str(Path.home())]], indirect=True)
-    def test_read_paths_makes_home_visible(self, sandbox: BubblewrapSandbox) -> None:
-        # With ~ in read_paths, $HOME becomes readable (but NOT writable).
-        r = sandbox.execute(f"ls {HOME} 2>&1; echo exit=$?")
+    def test_read_paths_allows_extra_dir(
+        self,
+        sandbox_with_test_paths: BubblewrapSandbox,
+        outside_dir: Path,
+    ) -> None:
+        # With the outside dir in read_paths, it becomes readable.
+        r = sandbox_with_test_paths.execute(
+            f"ls {shlex.quote(str(outside_dir))} 2>&1; echo exit=$?"
+        )
         assert r.exit_code == 0, r.output
-        assert "No such file or directory" not in r.output, r.output
+        assert FENCE_ERR not in r.output, r.output
 
-    @pytest.mark.parametrize("sandbox", [[str(Path.home())]], indirect=True)
-    def test_read_paths_do_not_allow_writes(self, sandbox: BubblewrapSandbox) -> None:
-        # read_paths bind is ro; writes to $HOME stay blocked. The command runs
-        # `echo x > target; echo exit=$?` -- the trailing `echo exit=$?` is a
-        # second command that succeeds, so the *overall* exit code is 0; assert
-        # on the inner `exit=` line and the error string instead.
-        target = Path.home() / f".bwrap-rwtest-{os.getpid()}"
+    def test_read_paths_do_not_allow_writes(
+        self,
+        sandbox_with_test_paths: BubblewrapSandbox,
+        outside_dir: Path,
+    ) -> None:
+        # The read_paths bind is ro. The trailing `echo exit=$?` is a second
+        # command that succeeds, so assert on the inner exit= line, not the
+        # overall exit code.
+        target = outside_dir / f"rwtest-{os.getpid()}"
         try:
-            r = sandbox.execute(f"echo x > {target} 2>&1; echo exit=$?")
+            r = sandbox_with_test_paths.execute(
+                f"echo x > {target} 2>&1; echo exit=$?"
+            )
             assert (
                 "Read-only file system" in r.output or "Permission denied" in r.output
             ), r.output
@@ -165,7 +165,7 @@ class TestReadPaths:
                 target.unlink()
 
 
-# --- process bootstrap -----------------------------------------------------
+# process bootstrap
 
 
 class TestProcessBootstrap:
@@ -184,12 +184,9 @@ class TestProcessBootstrap:
         assert str(launch) in r.output or str(launch.resolve()) in r.output, r.output
 
     @pytest.mark.parametrize("sandbox", [None], indirect=True)
-    def test_concurrent_execute_is_independent(
-        self, sandbox: BubblewrapSandbox
-    ) -> None:
+    def test_concurrent_execute_succeeds(self, sandbox: BubblewrapSandbox) -> None:
         """Parallel tool calls on one sandbox must all run. Each is an
-        independent bwrap invocation sharing no state, so this pins that the
-        argv rebuild-on-every-call contract holds under concurrency."""
+        independent bwrap invocation sharing no state."""
         n = 16
         results: list = [None] * n
         errs: list = [None] * n
@@ -213,7 +210,7 @@ class TestProcessBootstrap:
             assert f"call-{i}" in r.output, f"call {i}: {r.output!r}"
 
 
-# --- environment scrubbing -------------------------------------------------
+# environment scrubbing
 
 
 class TestEnvironmentScrubbing:
@@ -237,29 +234,25 @@ class TestEnvironmentScrubbing:
             assert key in r.output, f"{key} missing from sandbox env"
 
 
-# --- network ---------------------------------------------------------------
+# network (bubblewrap-specific: live netns check)
 
 
 class TestNetwork:
-    """Network is shared by default (coding needs it); --unshare-net when off."""
+    """Network shared by default (coding needs it); --unshare-net when off."""
 
     @pytest.mark.parametrize("sandbox", [None], indirect=True)
     def test_network_allowed_by_default(self, sandbox: BubblewrapSandbox) -> None:
-        # A best-effort DNS reachability check. We don't assert on the network
-        # being up (CI may block it), only that bwrap didn't unshare the netns:
-        # with the host netns, `ip` (if present) shows the host interfaces, not
-        # just loopback. Fall back to /proc/net/dev existing.
+        # Assert bwrap didn't unshare the netns: /proc/net/dev exists with the
+        # host interfaces (not just loopback).
         r = sandbox.execute("test -r /proc/net/dev && echo netns-shared")
         assert "netns-shared" in r.output, r.output
 
     @pytest.mark.parametrize("sandbox", [None], indirect=True)
     def test_network_off_unshares_net(self, sandbox: BubblewrapSandbox) -> None:
-        # Create a fresh sandbox with network=False and check only loopback.
-        # We can't reconfigure the fixture sandbox, so construct directly.
+        # Can't reconfigure the fixture sandbox, so construct directly.
         launch = sandbox._launch
         sb = BubblewrapSandbox("netoff-test", launch, network=False)
-        # In an unshared netns, only `lo` exists. `ip` may not be installed;
-        # /proc/net/dev lists interfaces and only has `lo` in a private netns.
+        # In an unshared netns, /proc/net/dev lists only `lo`.
         r = sb.execute("cat /proc/net/dev 2>&1")
         lines = [ln for ln in r.output.splitlines() if ln.strip() and ":" in ln]
         names = [ln.split(":")[0].strip() for ln in lines]
@@ -268,14 +261,14 @@ class TestNetwork:
         )
 
 
-# --- grep (inherited BaseSandbox.grep, GNU grep -Z) -------------------------
+# grep (inherited BaseSandbox.grep, GNU grep -Z)
 
 
 class TestGrep:
-    """The inherited `BaseSandbox.grep` builds `grep -rHnFZ`; on Linux GNU grep
-    treats `-Z` as `--null` (NUL after filename), which `_parse_grep_output`
-    expects. No override is needed. These live tests run the inherited path
-    through real bwrap + GNU grep and assert it returns matches, not an error."""
+    """Inherited `BaseSandbox.grep` builds `grep -rHnFZ`; GNU grep treats `-Z`
+    as `--null` (NUL after filename), which `_parse_grep_output` expects. No
+    override needed: these run the inherited path through real bwrap + GNU
+    grep and assert it returns matches, not an error."""
 
     @pytest.mark.parametrize("sandbox", [None], indirect=True)
     def test_grep_returns_matches_not_error(self, sandbox: BubblewrapSandbox) -> None:
@@ -345,13 +338,12 @@ class TestGrep:
             shutil.rmtree(target, ignore_errors=True)
 
 
-# --- file operations through the sandbox (execute-routed transport) --------
+# file operations through the sandbox (execute-routed transport)
 
 
 class TestFileOps:
-    """Upload/download round-trip via the base64-over-execute transport, and
-    that out-of-launch-dir paths are absent (not mounted), so the transport
-    fails with file_not_found -- the fence, not a provider-side check."""
+    """Upload/download round-trip, and that out-of-launch-dir paths are
+    unmounted so the transport fails with file_not_found (the fence)."""
 
     @pytest.mark.parametrize("sandbox", [None], indirect=True)
     def test_upload_download_roundtrip(self, sandbox: BubblewrapSandbox) -> None:
@@ -379,71 +371,41 @@ class TestFileOps:
         assert results[0].error == "file_not_found"
 
     @pytest.mark.parametrize("sandbox", [None], indirect=True)
-    def test_out_of_launch_dir_download_absent(
-        self, sandbox: BubblewrapSandbox
+    def test_out_of_launch_dir_download_blocked(
+        self, sandbox: BubblewrapSandbox, outside_dir: Path
     ) -> None:
-        # A path under $HOME outside the launch dir is not mounted, so download
-        # surfaces file_not_found (the fence). The home marker is a non-sensitive
-        # junk file the test creates -- not a real dotfile.
-        if str(sandbox._launch) == HOME:
-            pytest.skip("launch dir is $HOME")
-        target = Path.home() / f".bwrap-dltest-{os.getpid()}"
-        try:
-            target.write_text("fence-probe")
-        except (PermissionError, OSError) as exc:
-            # $HOME may be read-only when pytest itself runs sandboxed (the
-            # home root is a read-only fence ancestor), so the host-side
-            # marker can't be created -- skip rather than report a failure.
-            pytest.skip(f"cannot create host marker outside launch dir: {exc}")
-        try:
-            results = sandbox.download_files([str(target)])
-            assert results[0].content is None
-            # The fence surfaces as file_not_found (the path isn't mounted).
-            assert results[0].error == "file_not_found", results[0].error
-        finally:
-            with contextlib.suppress(FileNotFoundError):
-                target.unlink()
+        target = outside_dir / "fence-probe.txt"
+        target.write_text("fence-probe")
+        results = sandbox.download_files([str(target)])
+        assert results[0].content is None
+        assert results[0].error == "file_not_found", results[0].error
 
     @pytest.mark.parametrize("sandbox", [None], indirect=True)
-    def test_out_of_launch_dir_upload_fails(self, sandbox: BubblewrapSandbox) -> None:
-        # Uploading to a path under $HOME outside the launch dir: the parent
-        # isn't mounted, so mkdir -p fails and the upload errors.
-        if str(sandbox._launch) == HOME:
-            pytest.skip("launch dir is $HOME")
-        results = sandbox.upload_files([(f"{HOME}/.ssh/pwned", b"x")])
+    def test_out_of_launch_dir_upload_blocked(
+        self, sandbox: BubblewrapSandbox, outside_dir: Path
+    ) -> None:
+        target = outside_dir / "pwned"
+        results = sandbox.upload_files([(str(target), b"x")])
         assert results[0].error is not None
 
 
-# --- write confinement -----------------------------------------------------
+# write confinement
 
 
 class TestWriteConfinement:
-    """Writes outside the launch dir must be blocked. With bubblewrap the
-    target is either read-only (system binds) or not mounted (everything else),
-    so a write fails with EROFS or ENOENT rather than EPERM."""
-
-    @pytest.mark.parametrize("sandbox", [None], indirect=True)
-    def test_cannot_write_to_system_files(self, sandbox: BubblewrapSandbox) -> None:
-        # /etc is bound ro; a write there fails (read-only filesystem). The
-        # trailing `echo exit=$?` is a second command that succeeds, so assert
-        # on the error string and the inner exit line, not the overall code.
-        target = f"/etc/.bwrap-wtest-{os.getpid()}"
-        r = sandbox.execute(f"echo pwned > {target} 2>&1; echo exit=$?")
-        assert "Read-only file system" in r.output, r.output
-        assert "exit=" in r.output and "exit=0" not in r.output, r.output
+    """Writes outside the launch dir must be blocked: the target is ro
+    (system binds) or unmounted (everything else), so writes fail with EROFS
+    or ENOENT, not EPERM."""
 
     @pytest.mark.parametrize("sandbox", [None], indirect=True)
     def test_cannot_write_to_home_outside_launch(
-        self, sandbox: BubblewrapSandbox
+        self, sandbox: BubblewrapSandbox, outside_dir: Path
     ) -> None:
-        if str(sandbox._launch) == HOME:
-            pytest.skip("launch dir is $HOME")
-        target = Path.home() / f".bwrap-wtest-{os.getpid()}"
+        target = outside_dir / f"wtest-{os.getpid()}"
         try:
             r = sandbox.execute(f"echo pwned > {target} 2>&1; echo exit=$?")
-            # $HOME is pre-created read-only (0555) as an ancestor of the
-            # launch-dir/tool binds, so a write into it is denied (EROFS or
-            # EPERM); if it were not an ancestor, ENOENT. Either way: blocked.
+            # $HOME is not mounted or read-only, so the write is EROFS/EPERM,
+            # or ENOENT if not an ancestor of a mounted bind. Either way: blocked.
             assert (
                 "Read-only file system" in r.output
                 or "Permission denied" in r.output
