@@ -90,7 +90,12 @@ def test_bubblewrap_sandbox_boots_and_fences() -> None:
     # Non-sensitive junk file in the home root (outside the launch dir) that
     # bubblewrap should fence. Created by the test, not a real dotfile.
     home_marker = Path.home() / f".bwrap-e2e-{os.getpid()}"
-    home_marker.write_text("fence-probe")
+    try:
+        home_marker.write_text("fence-probe")
+    except (PermissionError, OSError) as exc:
+        # $HOME may be read-only when pytest itself runs sandboxed, so the
+        # host-side marker can't be created -- skip rather than fail.
+        pytest.skip(f"cannot create host marker outside launch dir: {exc}")
     try:
         prompt = (
             f"Do these two things and report both results:\n"

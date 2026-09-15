@@ -363,6 +363,32 @@ class TestProfileText:
                     assert f'(allow file-read-metadata (subpath "{acc}"))' in text
 
 
+# --- environment scrubbing (no sandbox-exec needed) ------------------------
+
+
+class TestEnvScrubbing:
+    """`_env` returns a minimal, secret-free environment -- dcode's own env
+    (with API keys/tokens) is not inherited."""
+
+    def test_minimal_env_only(self, tmp_path: Path) -> None:
+        sb = SeatbeltSandbox("env-test", tmp_path)
+        env = sb._env()
+        assert set(env) == {"PATH", "HOME", "TMPDIR", "SHELL", "LANG"}
+
+    def test_home_is_real_user_home(self, tmp_path: Path) -> None:
+        # HOME is the real user home, not the launch dir: toolchains resolve
+        # their caches relative to HOME (Go: ~/go, ~/Library/Caches/go-build;
+        # Rust: ~/.cargo; ...), and the SBPL profile -- not HOME -- is the
+        # fence that keeps secrets (~/.ssh, ~/.aws, ...) unreadable.
+        # See provider._env.
+        sb = SeatbeltSandbox("env-test", tmp_path)
+        assert sb._env()["HOME"] == str(Path.home())
+
+    def test_tmpdir_inside_launch_dir(self, tmp_path: Path) -> None:
+        sb = SeatbeltSandbox("env-test", tmp_path)
+        assert sb._env()["TMPDIR"] == str(tmp_path.resolve() / ".tmp")
+
+
 # --- provider id validation (no sandbox-exec needed) -----------------------
 
 

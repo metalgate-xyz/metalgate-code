@@ -388,7 +388,13 @@ class TestFileOps:
         if str(sandbox._launch) == HOME:
             pytest.skip("launch dir is $HOME")
         target = Path.home() / f".bwrap-dltest-{os.getpid()}"
-        target.write_text("fence-probe")
+        try:
+            target.write_text("fence-probe")
+        except (PermissionError, OSError) as exc:
+            # $HOME may be read-only when pytest itself runs sandboxed (the
+            # home root is a read-only fence ancestor), so the host-side
+            # marker can't be created -- skip rather than report a failure.
+            pytest.skip(f"cannot create host marker outside launch dir: {exc}")
         try:
             results = sandbox.download_files([str(target)])
             assert results[0].content is None

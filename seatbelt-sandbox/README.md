@@ -58,6 +58,14 @@ dcode --sandbox seatbelt --sandbox-id my-project
   HOME, TMPDIR, SHELL, LANG). dcode's own environment (typically containing
   API keys and tokens like `OPENAI_API_KEY`, `GITHUB_TOKEN`) is **not**
   inherited, so sandboxed code can't `printenv` them or exfiltrate them.
+  `HOME` points at the real user home (not the launch dir): toolchains
+  resolve their caches relative to `HOME` (Go: `~/go`, Rust: `~/.cargo`),
+  and the SBPL profile -- not `HOME` -- is the fence that keeps the home's
+  secrets (`~/.ssh`, `~/.aws`, ...) unreadable. `PATH` is the one host
+  variable that *is* inherited (with a sane fallback) -- it's just a list of
+  directories, not a secret, and inheriting it lets the agent reach the same
+  toolchain binaries (`cargo`, `go`, `nix`, ...) that the curated read
+  re-allows under `/Users` make executable.
 - Network: denied by default. Pass `network=True` via
   `[sandboxes.providers.seatbelt.params]` in `~/.deepagents/config.toml` to
   allow it (all-or-nothing -- no per-host allowlisting).

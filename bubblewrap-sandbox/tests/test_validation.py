@@ -296,9 +296,13 @@ class TestEnvScrubbing:
         env = sb._env()
         assert set(env) == {"PATH", "HOME", "TMPDIR", "SHELL", "LANG"}
 
-    def test_home_points_at_launch_dir(self, tmp_path: Path) -> None:
+    def test_home_is_real_user_home(self, tmp_path: Path) -> None:
+        # HOME is the real user home, not the launch dir: toolchains resolve
+        # their caches relative to HOME (~/go, ~/.cargo, ~/.cache/...), and
+        # the mount namespace -- not HOME -- is the fence that keeps secrets
+        # (~/.ssh, ~/.aws, ...) invisible (unmounted). See provider._env.
         sb = BubblewrapSandbox("env-test", tmp_path)
-        assert sb._env()["HOME"] == str(tmp_path.resolve())
+        assert sb._env()["HOME"] == str(Path.home())
 
     def test_tmpdir_inside_launch_dir(self, tmp_path: Path) -> None:
         sb = BubblewrapSandbox("env-test", tmp_path)

@@ -118,12 +118,14 @@ _SYSTEM_RO_BINDS: tuple[tuple[str, str, bool], ...] = (
 )
 
 
-# Toolchain and config subpaths under $HOME that a coding sandbox needs to
-# read. Each is bind-mounted read-only at its real path so compilers,
-# runtimes, and VCS keep working without exposing secrets. Mirrors the
-# enumeration the seatbelt provider re-allows under /Users, adapted to Linux
-# paths (no `Library/Caches`). Each entry is a relative path resolved against
-# $HOME; nonexistent ones are skipped at argv-build time. Extend via
+# Toolchain and config subpaths that a coding sandbox needs to read. Each is
+# bind-mounted read-only at its real path so compilers, runtimes, and VCS
+# keep working without exposing secrets. Mirrors the enumeration the
+# seatbelt provider re-allows under /Users, adapted to Linux paths (no
+# `Library/Caches`). Each entry is resolved as: an absolute path as-is;
+# a relative path against $HOME; a `~`-prefixed path via expanduser (leading
+# `~` only, so a leading `~` works for entries the rest of the list keeps as
+# relative). Nonexistent ones are skipped at argv-build time. Extend via
 # `read_paths` in config.toml for project- or user-specific paths.
 _TOOL_READ_PATHS = (
     # VCS
@@ -147,14 +149,19 @@ _TOOL_READ_PATHS = (
     "go",
     "go.work",
     ".cache/gopls",
+    # Nix
+    ".nix-profile/bin",
+    "/etc/nix",
+    ".config/nix",
 )
 
 
-# Toolchain cache subpaths under $HOME that a coding sandbox must WRITE to.
+# Toolchain cache subpaths that a coding sandbox must WRITE to.
 # Compilers and language servers (gopls, rust-analyzer) build metadata into
 # these caches; a read-only bind breaks type checking and go-to-definition
-# even though the source is readable. Each entry is a relative path resolved
-# against $HOME; nonexistent ones are skipped at argv-build time. Symmetric to
+# even though the source is readable. Each entry is resolved as: an absolute
+# path as-is; a relative path against $HOME; a `~`-prefixed path via
+# expanduser. Nonexistent ones are skipped at argv-build time. Symmetric to
 # `_TOOL_READ_PATHS`.
 _TOOL_WRITE_PATHS = (
     # Go: gopls writes compiled package metadata to the build cache. Without
@@ -167,6 +174,13 @@ _TOOL_WRITE_PATHS = (
     # here; a read-only cache makes installs fail with "Operation not
     # permitted" on the .git index.
     ".cache/uv",
+    # Nix
+    "/nix/store",
+    "/nix/var",
+    ".cache/nix",
+    ".local/share",
+    ".local/state",
+    f"/run/user/{os.getuid()}",
 )
 
 
@@ -227,37 +241,72 @@ def _resolve_launch_dir() -> Path:
     return Path.cwd().resolve()
 
 
-def _tool_read_paths() -> list[str]:
-    """Resolve `_TOOL_READ_PATHS` against $HOME, returning existing paths.
+def _resolve_path(rel: str) -> Path:
+    """Resolve one `_TOOL_*_PATHS` entry to a canonical candidate path.
 
+    An absolute path (``/nix/store``) is used as-is; a relative path
+    (``.cargo``) is joined under ``$HOME``; a ``~``-prefixed path is expanded
+    via ``Path.expanduser`` (which honors only a *leading* ``~``, so ``~`` is
+    only meaningful as the first segment). The result is NOT yet checked for
+    existence or resolved to its real-path form -- callers do that after the
+    existence filter, so a missing tool generates no bind and no noise.
+    """
+    # Expand a leading `~` first: pathlib's `/` operator discards the left
+    # operand when the right is absolute, so `home / "~/.x"` would join to a
+    # literal `~` segment -- expand before any join instead.
+    p = Path(rel).expanduser()
+    if p.is_absolute():
+        return p
+    return Path.home() / p
+
+
+def _tool_read_paths() -> list[str]:
+    """Resolve `_TOOL_READ_PATHS`, returning existing paths.
+
+    Absolute entries are used as-is; relative entries are resolved against
+    ``$HOME``; ``~``-prefixed entries are expanded (leading ``~`` only).
     Nonexistent paths are silently skipped (a tool not installed shouldn't
     generate noise or a failed bind). Unlike the seatbelt provider there is
     no `/Users` filter -- on Linux the home root is `/home/<user>` (or
     wherever `$HOME` points), and all of these are meant to be bound.
+
+    Symlinks are NOT followed: the path is bound as-written (expanded, but
+    not resolved) so the bind destination matches the symlink path that the
+    inherited host ``PATH`` and ``$HOME``-relative lookups reference. ``bwrap``
+    follows a symlink *source* itself, so binding ``~/.nix-profile/bin`` (a
+    symlink into ``/nix/var/...``) still mounts the real nix binaries at the
+    symlink path -- the agent's PATH entry ``~/.nix-profile/bin`` then
+    resolves inside the sandbox. ``.resolve()`` would instead bind at
+    ``/nix/var/nix/profiles/default/bin``, which PATH never references, so
+    the agent would get ``command not found`` even though the bind exists
+    (and that resolved path is also shadowed by the later writable
+    ``/nix/var`` bind).
     """
-    home = Path.home()
     out: list[str] = []
     for rel in _TOOL_READ_PATHS:
-        resolved = (home / rel).expanduser()
+        resolved = _resolve_path(rel)
         if not resolved.exists():
             continue
-        out.append(str(resolved.resolve()))
+        out.append(str(resolved))
     return out
 
 
 def _tool_write_paths() -> list[str]:
-    """Resolve `_TOOL_WRITE_PATHS` against $HOME, returning existing paths.
+    """Resolve `_TOOL_WRITE_PATHS`, returning existing paths.
 
-    Same skip rule as `_tool_read_paths`: nonexistent paths are dropped (a
-    tool not installed generates no cache to write).
+    Same resolution and skip rule as `_tool_read_paths`: absolute paths
+    as-is, relative paths against ``$HOME``, ``~``-prefixed via expanduser;
+    nonexistent paths are dropped (a tool not installed generates no cache
+    to write). Symlinks are NOT followed, for the same reason as
+    `_tool_read_paths`: the bind must land at the path the toolchain looks
+    up, not the symlink's resolved target.
     """
-    home = Path.home()
     out: list[str] = []
     for rel in _TOOL_WRITE_PATHS:
-        resolved = (home / rel).expanduser()
+        resolved = _resolve_path(rel)
         if not resolved.exists():
             continue
-        out.append(str(resolved.resolve()))
+        out.append(str(resolved))
     return out
 
 
@@ -392,8 +441,21 @@ class BubblewrapSandbox(BaseSandbox):
         # their caches relative to HOME (Go: ~/go, ~/.cache/go-build; Rust:
         # ~/.cargo; ...), and the mount namespace -- not HOME -- is the fence
         # that keeps secrets (~/.ssh, ~/.aws, ...) invisible (unmounted).
+        #
+        # PATH is *inherited* from the host rather than hardcoded. PATH is not
+        # a secret -- it is just a list of directories -- and the curated
+        # read-only binds (`_tool_read_paths`) mount the user's toolchains
+        # (~/.nix-profile/bin, ~/.cargo/bin, ~/.local/bin, ...) at their real
+        # paths, but those binaries are unreachable unless their dirs are on
+        # PATH. A hardcoded PATH would make the agent blind to the very tools
+        # the binds were added to expose; inheriting the host PATH lets the
+        # agent use the same tools the user does. (PATH entries whose dirs are
+        # not mounted in the sandbox are simply dead entries -- a `command not
+        # found`, not a leak or a hole.)
         return {
-            "PATH": "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/snap/bin",
+            "PATH": os.environ.get(
+                "PATH", "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/snap/bin"
+            ),
             "HOME": str(Path.home()),
             # TMPDIR inside the launch dir (a writable area); created lazily by
             # the sandboxed command itself, not by the provider process.
