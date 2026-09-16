@@ -65,7 +65,11 @@ dcode --sandbox bubblewrap --sandbox-id my-project
   containing API keys and tokens like `OPENAI_API_KEY`, `GITHUB_TOKEN`) is
   **not inherited**, so sandboxed code can't `printenv` them or exfiltrate
   them. `HOME` points at the launch dir (the writable area): the sandbox's
-  "home" is the project, and the real home's secrets are not mounted.
+  "home" is the project, and the real home's secrets are not mounted. `PATH`
+  is the one host variable that *is* inherited (with a sane fallback) -- it's
+  just a list of directories, not a secret, and inheriting it lets the agent
+  reach the same toolchain binaries (`nix`, `cargo`, `go`, ...) that the
+  read-only binds below mount into the sandbox.
 - **Network**: **allowed by default** (the host network namespace is shared
   -- coding work needs it: pip, npm, git, tests, dev servers). Pass
   `network=False` via `[sandboxes.providers.bubblewrap.params]` in

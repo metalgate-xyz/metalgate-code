@@ -22,21 +22,21 @@ pytestmark = pytest.mark.skipif(
     reason="seatbelt tests require macOS",
 )
 
-# --- sandbox_id validation -------------------------------------------------
+# sandbox_id validation
 
 
 class TestIdValidation:
-    """`sandbox_id` only flows into a profile filename under `_PROFILES_ROOT`
-    (no per-sandbox directory). The charset regex is a friendly-error
-    fast-fail for filename safety, not a security boundary."""
+    """`sandbox_id` only flows into a profile filename under `_PROFILES_ROOT`.
+    The regex is a friendly-error fast-fail for filename safety, not a
+    security boundary."""
 
     @pytest.mark.parametrize(
         "bad",
         [
-            "a/b",  # path separator -- subdirectory under _PROFILES_ROOT
+            "a/b",  # path separator: subdirectory under _PROFILES_ROOT
             "a\\b",  # backslash (hazard on Windows-shared mounts)
             "",  # empty
-            "foo bar",  # whitespace -- breaks unquoted filenames
+            "foo bar",  # whitespace: breaks unquoted filenames
             "foo\tbar",  # tab
             "foo\nbar",  # newline
             "foo;bar",  # shell metachar
@@ -50,7 +50,7 @@ class TestIdValidation:
             "foo*bar",
             "foo?bar",
             "foo[bar]",
-            "\x00",  # null byte -- truncates C strings
+            "\x00",  # null byte: truncates C strings
         ],
     )
     def test_rejects_invalid_ids(self, bad: str) -> None:
@@ -64,22 +64,22 @@ class TestIdValidation:
             "my.project",
             "a",
             "A1-B2.c3",
-            "-n",  # leading dash -- safe: id is never a CLI arg, only a filename
-            ".hidden",  # leading dot -- safe filename under _PROFILES_ROOT
-            "..",  # two dots -- passes charset; harmless as a filename (no dir to escape)
+            "-n",  # leading dash: safe, id is never a CLI arg, only a filename
+            ".hidden",  # leading dot: safe filename under _PROFILES_ROOT
+            "..",  # two dots: passes charset; harmless as a filename (no dir to escape)
         ],
     )
     def test_accepts_valid_ids(self, ok: str) -> None:
         assert _ID_PATTERN.match(ok) is not None
 
 
-# --- _read_allow_block (SBPL re-allow builder) -----------------------------
+# _read_allow_block (SBPL re-allow builder)
 
 
 class TestReadAllowBlock:
     """`_read_allow_block` re-allows the launch dir + tool paths + read_paths
-    that live under /Users; entries outside /Users are skipped (already
-    covered by the broad allow)."""
+    under /Users; entries outside /Users are skipped (already covered by the
+    broad allow)."""
 
     def test_launch_dir_emits_all_three_read_op_types(self) -> None:
         launch = "/Users/tester/launch"
@@ -96,8 +96,8 @@ class TestReadAllowBlock:
         assert f'(allow file-read-metadata (subpath "{proj}"))' in block
 
     def test_non_users_paths_are_skipped(self) -> None:
-        # /usr/local and /opt are already readable via the broad allow; they
-        # must NOT appear in the re-allow block. The launch dir still appears.
+        # /usr/local and /opt are already readable via the broad allow and must
+        # not appear in the re-allow block. The launch dir still appears.
         launch = "/Users/tester/launch"
         block = _read_allow_block(launch, ["/usr/local", "/opt/homebrew"])
         assert "/usr/local" not in block
@@ -111,9 +111,9 @@ class TestReadAllowBlock:
         assert block.count(f'subpath "{launch}"') == 3
 
     def test_paths_outside_users_yield_no_launch_reallow(self) -> None:
-        # When the launch dir itself is outside /Users (e.g. under /tmp),
-        # it is NOT re-allowed (already covered by the broad read allow);
-        # only tool/config paths under /Users appear.
+        # When the launch dir itself is outside /Users (e.g. under /tmp), it's
+        # already covered by the broad read allow, so only /Users tool/config
+        # paths appear.
         block = _read_allow_block("/private/tmp/launch", [])
         assert "/private/tmp/launch" not in block
 
@@ -133,15 +133,14 @@ class TestReadAllowBlock:
 class TestAncestorMetadata:
     """`_ancestor_metadata_rules` emits metadata-only re-allow rules for /Users
     and each launch-dir ancestor, so `cd` can traverse without leaking
-    ancestor contents."""
+    contents."""
 
     def test_emits_users_and_each_ancestor(self) -> None:
         rules = _ancestor_metadata_rules("/Users/u/code/proj")
         assert '(allow file-read-metadata (subpath "/Users"))' in rules
         assert '(allow file-read-metadata (subpath "/Users/u"))' in rules
         assert '(allow file-read-metadata (subpath "/Users/u/code"))' in rules
-        # The launch dir itself is NOT in the metadata rules (it gets full
-        # read from _read_allow_block).
+        # The launch dir itself gets full read from _read_allow_block, not here.
         assert "/Users/u/code/proj" not in rules
 
     def test_metadata_only_no_data_or_file_read_star(self) -> None:
@@ -155,12 +154,11 @@ class TestAncestorMetadata:
         assert _ancestor_metadata_rules("/opt/proj") == ""
 
 
-# --- BaseSandbox abstract surface ------------------------------------------
+# BaseSandbox abstract surface
 
 
 class TestBaseSandboxSurface:
-    """The abstract members must be implemented; derived methods
-    (ls/read/write/edit/delete/grep/glob) come from BaseSandbox."""
+    """Abstract members are implemented; derived methods come from BaseSandbox."""
 
     def test_sandbox_instantiates_and_has_abstract_members(
         self, tmp_path: Path
@@ -176,21 +174,16 @@ class TestBaseSandboxSurface:
             assert callable(getattr(sb, name)), name
 
 
-# --- BSD grep command builder ---------------------------------------------
+# BSD grep command builder
 
 
 class TestBsdGrepBuilder:
     """`_build_bsd_grep_cmd` swaps the base `grep -rHnFZ` for `--null` so the
-    output parses under BSD grep (macOS), where `-Z` is `--decompress`, not
-    the NUL separator `_parse_grep_output` expects.
+    output parses under BSD grep (macOS), where `-Z` is `--decompress`, not the
+    NUL separator `_parse_grep_output` expects.
 
-    The base `BaseSandbox.grep` builds `grep -rHnFZ` and the parser splits each
-    record on a NUL (`path\0line:text`). On BSD grep `-Z` is `--decompress` and
-    emits plain `path:line:text`, so every match becomes an unparseable line
-    and grep returns a hard error. `--null` is the NUL-after-filename flag on
-    both BSD and GNU grep, so the same parser works unchanged. These tests run
-    without `sandbox-exec`: they assert the command shape and that the parser
-    consumes real `--null`-shaped output.
+    These run without `sandbox-exec`: they assert the command shape and that
+    the parser consumes real `--null`-shaped output.
     """
 
     def test_plain_search_uses_null_not_capital_z(self) -> None:
@@ -211,9 +204,7 @@ class TestBsdGrepBuilder:
     def test_slash_glob_uses_python_not_grep(self) -> None:
         # Slash-containing globs can't use `grep --include` (basename-only), so
         # they run an in-process Python search that writes its own
-        # `path\0line:text` records. The command is a `python3 -c` invocation
-        # (base64-transported so it survives the seatbelt `sh -c "..."` wrap),
-        # never the `grep -r` route that would emit the broken `-Z` form.
+        # `path\0line:text` records.
         cmd = _build_bsd_grep_cmd("hello", "/p", "src/**/*.py")
         assert "python3 -c" in cmd
         assert "-rHnFZ" not in cmd
@@ -221,11 +212,8 @@ class TestBsdGrepBuilder:
 
     def test_slash_glob_command_survives_sh_c_wrap(self) -> None:
         # The seatbelt provider wraps every command in `sh -c "cd ... && <cmd>"`.
-        # The base `_GREP_PATH_GLOB_TEMPLATE` embeds unescaped `"` inside Python
-        # comments, which close the shell's outer quote and truncate the script
-        # with a SyntaxError. Our slash-glob command must survive that wrap:
-        # running it under `sh -c "cd <dir> && <cmd>"` must exit 0 and emit a
-        # parseable `path\0line:text` record, not a Python traceback.
+        # The slash-glob command must survive that wrap: exit 0 and emit a
+        # parseable `path\0line:text` record, not a traceback.
         import shlex
         import subprocess
         import tempfile
@@ -268,32 +256,29 @@ class TestBsdGrepBuilder:
         assert result.matches[0]["text"] == "hello again"
 
     def test_plain_colon_output_is_unparseable_by_base_parser(self) -> None:
-        # Regression guard: plain `path:line:text` (what BSD `-Z` actually
-        # emits) is NOT parseable by the base parser -- it yields an error when
-        # the path itself contains a colon-bearing shape. This is the failure
-        # the override exists to prevent.
+        # BSD `-Z` (`--decompress`) emits plain `path:line:text` with no NUL,
+        # which the base parser cannot split: the failure the override exists
+        # to prevent.
         from deepagents.backends.protocol import ExecuteResponse
         from deepagents.backends.sandbox import _parse_grep_output
 
-        # BSD `-Z` (`--decompress`) emits plain path:line:text with no NUL.
         bsd_minus_z_output = "./b.txt:2:hello again\n./a.txt:1:hello world\n"
         result = _parse_grep_output(
             ExecuteResponse(output=bsd_minus_z_output, exit_code=0), ".", None
         )
-        # When no NUL is present, the two-step split raises ValueError on lines
-        # whose `rest` has no second colon to split, leaving matches empty and
-        # surfacing the last such line as an error.
+        # With no NUL, the split fails and the last offending line surfaces as
+        # an error with empty matches.
         assert result.error is not None
         assert not result.matches
 
 
-# --- profile generation (no sandbox-exec needed) --------------------------
+# profile generation (no sandbox-exec needed)
 
 
 class TestProfileText:
-    """The generated SBPL profile text reflects the launch-dir model: broad
-    reads, /Users deny, launch-dir re-allow + read_paths re-allow,
-    launch-dir-only writes, and the configured network rule."""
+    """The generated SBPL profile reflects the launch-dir model: broad reads,
+    /Users deny, launch-dir re-allow + read_paths re-allow, launch-dir-only
+    writes, and the configured network rule."""
 
     def test_profile_contains_broad_reads_and_users_deny(
         self, tmp_path: Path
@@ -315,8 +300,7 @@ class TestProfileText:
             # Under /Users: three re-allow rules (one per read op type).
             assert text.count(f'subpath "{resolved}"') >= 3
         else:
-            # Outside /Users: already covered by the broad read allow, so
-            # only the write rule references it.
+            # Outside /Users: only the write rule references it.
             assert f'(allow file-write*\n    (subpath "{resolved}"))' in text
 
     def test_profile_writes_confined_to_launch_dir(self, tmp_path: Path) -> None:
@@ -325,7 +309,7 @@ class TestProfileText:
         resolved = str(tmp_path.resolve())
         assert f'(allow file-write*\n    (subpath "{resolved}"))' in text
         assert '(literal "/dev/null")' in text
-        # No /Users write-deny needed (default deny covers it); assert it's absent.
+        # Default deny covers /Users writes; no explicit write-deny needed.
         assert '(deny file-write*' not in text
 
     def test_profile_network_default_allow(self, tmp_path: Path) -> None:
@@ -363,7 +347,31 @@ class TestProfileText:
                     assert f'(allow file-read-metadata (subpath "{acc}"))' in text
 
 
-# --- provider id validation (no sandbox-exec needed) -----------------------
+# environment scrubbing (no sandbox-exec needed)
+
+
+class TestEnvScrubbing:
+    """`_env` returns a minimal, secret-free environment: dcode's own env
+    (API keys/tokens) is not inherited."""
+
+    def test_minimal_env_only(self, tmp_path: Path) -> None:
+        sb = SeatbeltSandbox("env-test", tmp_path)
+        env = sb._env()
+        assert set(env) == {"PATH", "HOME", "TMPDIR", "SHELL", "LANG"}
+
+    def test_home_is_real_user_home(self, tmp_path: Path) -> None:
+        # HOME is the real user home, not the launch dir: toolchains resolve
+        # caches relative to HOME (Go: ~/go; Rust: ~/.cargo; ...). The SBPL
+        # profile, not HOME, is the fence that keeps secrets unreadable.
+        sb = SeatbeltSandbox("env-test", tmp_path)
+        assert sb._env()["HOME"] == str(Path.home())
+
+    def test_tmpdir_inside_launch_dir(self, tmp_path: Path) -> None:
+        sb = SeatbeltSandbox("env-test", tmp_path)
+        assert sb._env()["TMPDIR"] == str(tmp_path.resolve() / ".tmp")
+
+
+# provider id validation (no sandbox-exec needed)
 
 
 class TestProviderIdValidation:

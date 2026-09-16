@@ -533,8 +533,22 @@ class SeatbeltSandbox(BaseSandbox):
         # their caches relative to HOME (Go: ~/go, ~/Library/Caches/go-build;
         # Rust: ~/.cargo; ...), and the SBPL profile -- not HOME -- is the
         # fence that keeps secrets (~/.ssh, ~/.aws, ...) unreadable.
+        #
+        # PATH is *inherited* from the host rather than hardcoded. PATH is not
+        # a secret -- it is just a list of directories -- and the curated read
+        # re-allows (`_tool_read_paths`) make the user's toolchains
+        # (~/.cargo/bin, ~/.local/bin, ...) readable so their binaries can exec,
+        # but those binaries are unreachable unless their dirs are on PATH. A
+        # hardcoded PATH would make the agent blind to the very tools the
+        # re-allows were added to expose; inheriting the host PATH lets the
+        # agent use the same tools the user does. (PATH entries whose dirs are
+        # under /Users but not re-allowed are blocked by the /Users deny -- a
+        # `command not found`, not a leak or a hole; entries outside /Users are
+        # readable and exec is allowed via `(allow process-exec)`.)
         return {
-            "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+            "PATH": os.environ.get(
+                "PATH", "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+            ),
             "HOME": str(Path.home()),
             # TMPDIR inside the launch dir (a writable area); created lazily by
             # the sandboxed command itself, not by the provider process.
