@@ -152,9 +152,7 @@ class TestReadPaths:
         # overall exit code.
         target = outside_dir / f"rwtest-{os.getpid()}"
         try:
-            r = sandbox_with_test_paths.execute(
-                f"echo x > {target} 2>&1; echo exit=$?"
-            )
+            r = sandbox_with_test_paths.execute(f"echo x > {target} 2>&1; echo exit=$?")
             assert (
                 "Read-only file system" in r.output or "Permission denied" in r.output
             ), r.output

@@ -43,6 +43,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import threading
 import uuid
 from collections.abc import Callable
@@ -145,6 +146,41 @@ def _resolve_launch_dir() -> Path:
     return Path.cwd().resolve()
 
 
+def _running_venv() -> Path | None:
+    """Return the venv dcode runs in, or None for the system interpreter.
+
+    ``sys.prefix`` is the active venv root; it equals ``sys.base_prefix``
+    only outside a venv. Re-allowed under /Users so the inherited PATH
+    resolves to its binaries even when dcode is launched outside the venv's
+    project.
+    """
+    if sys.prefix == sys.base_prefix:
+        return None
+    return Path(sys.prefix).resolve()
+
+
+def _agent_home() -> Path:
+    """Return the dcode profile root (``DEEPAGENTS_HOME`` or the default)."""
+    raw = os.environ.get("DEEPAGENTS_HOME")
+    if raw:
+        return Path(raw).expanduser().resolve()
+    return (Path.home() / ".deepagents").resolve()
+
+
+def _agent_rw_paths() -> list[Path]:
+    """Return existing agent-authoring paths under the profile root.
+
+    ``agent/AGENTS.md`` (agent memory) and ``global_tools`` (agent repo tool
+    source) live under the profile root, outside the launch dir when dcode
+    runs against a different project. Re-allowed read-write under /Users.
+    ``global_tools`` is created by the dynamic_tools plugin, so it exists
+    when dcode starts.
+    """
+    home = _agent_home()
+    candidates = [home / "agent" / "AGENTS.md", home / "global_tools"]
+    return [p.resolve() for p in candidates if p.exists()]
+
+
 _PROFILE_HEADER = """\
 (version 1)
 (deny default)
@@ -152,6 +188,26 @@ _PROFILE_HEADER = """\
 (allow process-exec)
 (allow signal (target self))
 (allow sysctl-read)
+;; BSD routing sockets (AF_ROUTE) are gated by seatbelt's `system-socket`
+;; operation, which is distinct from `network*` (the latter governs
+;; bind/connect/send/recv on a socket, not socket creation). `socket(AF_ROUTE,
+;; SOCK_RAW, 0)` is the standard Darwin mechanism for enumerating interfaces
+;; and monitoring route changes (e.g. Go's netmon.New() opens one to watch
+;; for network state changes); without this allow it fails with EPERM even
+;; when network is otherwise allowed. Scoped to AF_ROUTE so other raw/system
+;; sockets stay denied. Mirrors Apple's own mDNSResponderHelper.sb.
+(allow system-socket
+    (socket-domain AF_ROUTE))
+;; TLS trust evaluation on Darwin goes through Mach IPC to trustd /
+;; SecurityServer, not just the root cert files. Without these allows,
+;; HTTPS certificate verification fails and `go mod download` can't fetch.
+(allow mach-lookup
+    (global-name "com.apple.trustd")
+    (global-name "com.apple.trustd.agent")
+    (global-name "com.apple.securityd.xpc")
+    (global-name "com.apple.SecurityServer")
+    (global-name "com.apple.TrustEvaluationAgent")
+    (global-name "com.apple.ocspd"))
 ;; Broad read access is required for a process to bootstrap under
 ;; (deny default): dyld must read the shared cache, frameworks, locale data,
 ;; and the dynamic linker needs file-read-data/metadata across /usr, /System,
@@ -253,6 +309,10 @@ _TOOL_WRITE_PATHS = (
     # write access it can't load views, so textDocument/definition returns null.
     "Library/Caches/go-build",
     ".cache/go-build",
+    # Go: `go mod download` writes downloaded modules to the module cache at
+    # $GOPATH/pkg/mod (default ~/go/pkg/mod). The whole ~/go tree must be
+    # writable so Go can create pkg/mod and its cache/sum subdirs from scratch.
+    "go",
     # gopls's own cache (typerefs, export data, diagnostics). Without write
     # access gopls logs errors on every request and degrades.
     "Library/Caches/gopls",
@@ -330,6 +390,10 @@ def _read_allow_block(launch: str, read_paths: list[str]) -> str:
     Paths outside ``/Users`` are skipped (already covered by the broad allow).
     """
     all_paths = [launch, *_tool_read_paths(), *read_paths]
+    venv = _running_venv()
+    if venv is not None:
+        all_paths.append(str(venv))
+    all_paths.extend(str(p) for p in _agent_rw_paths())
     lines: list[str] = []
     seen: set[str] = set()
     for raw in all_paths:
@@ -358,7 +422,7 @@ def _write_allow_block() -> str:
     """
     lines: list[str] = []
     seen: set[str] = set()
-    for raw in _tool_write_paths():
+    for raw in [*_tool_write_paths(), *(str(p) for p in _agent_rw_paths())]:
         resolved = str(Path(raw).expanduser().resolve())
         if resolved in seen or not resolved.startswith("/Users/"):
             continue

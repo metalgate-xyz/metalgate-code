@@ -58,7 +58,7 @@ import importlib.util
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
     from deepagents_code.extensions import ExtensionAPI
@@ -73,6 +73,19 @@ LOCAL_TOOLS_DIRNAME = ".metalgate/tools"
 # agent repo's own tools global without pulling every local project's
 # ``.metalgate/tools`` into the global namespace.
 GLOBAL_TOOLS_DIRNAME = ".metalgate/global_tools"
+
+
+class ToolDirectories(NamedTuple):
+    """The two directories the scanner watches, by role.
+
+    ``local`` is the current project's tools dir; ``global`` is the agent
+    repo's global tools dir. They differ in the final path segment, so both
+    are always distinct.
+    """
+
+    local: Path
+    global_: Path
+
 
 # Per-registry dedup state. dcode (>=0.1.66) builds a fresh ExtensionRegistry
 # per workspace binding, invoking this extension factory more than once in the
@@ -147,18 +160,15 @@ def _agent_project_root(api: ExtensionAPI) -> Path:
     return Path(api.cwd)
 
 
-def resolve_tool_directories(api: ExtensionAPI) -> list[Path]:
-    """Return the de-duplicated tool directories to scan, in load order.
+def resolve_tool_directories(api: ExtensionAPI) -> ToolDirectories:
+    """Return the tool directories to scan, by role.
 
-    The local project's ``tools`` directory is scanned first; the agent repo's
-    ``global_tools`` directory is appended when it resolves to a distinct path.
+    ``local`` is the current project's ``.metalgate/tools`` dir; ``global`` is
+    the agent repo's ``.metalgate/global_tools`` dir.
     """
     local = Path(api.cwd) / LOCAL_TOOLS_DIRNAME
-    global_dir = _agent_project_root(api) / GLOBAL_TOOLS_DIRNAME
-    dirs = [local]
-    if global_dir != local:
-        dirs.append(global_dir)
-    return dirs
+    global_ = _agent_project_root(api) / GLOBAL_TOOLS_DIRNAME
+    return ToolDirectories(local=local, global_=global_)
 
 
 def _discover_files(directory: Path):
@@ -191,7 +201,7 @@ def _extract_callables(module):
     return found
 
 
-def scan_and_register(api: ExtensionAPI, directories: list[Path]) -> list[str]:
+def scan_and_register(api: ExtensionAPI, directories: ToolDirectories) -> list[str]:
     """Scan ``directories`` and register any new/changed tools.
 
     Returns a list of newly registered tool names (plus a trailing
