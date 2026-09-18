@@ -310,7 +310,7 @@ async def test_loads_via_dcode_loader(tmp_path, monkeypatch):
     source = SourceInfo(
         path=entry,
         is_package=True,
-        source_id="dynamic_tools@evroc-extensions",
+        source_id="dynamic_tools@metalgate-extensions",
         scope=SourceScope.TEMPORARY,
         version="0.1.0",
     )

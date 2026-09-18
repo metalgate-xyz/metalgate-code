@@ -1,7 +1,7 @@
-"""evroc chat model — a thin ``ChatOpenAI`` subclass.
+"""evroc-dcode chat model — a thin ``ChatOpenAI`` subclass.
 
 dcode's ``class_path`` mechanism imports this class via
-``importlib.import_module("evroc")`` and instantiates it with
+``importlib.import_module("evroc_dcode")`` and instantiates it with
 ``ChatModel(model=<model_name>, **kwargs)`` where ``kwargs`` includes
 ``base_url`` and ``api_key`` resolved from the ``[models.providers.evroc]``
 config table.

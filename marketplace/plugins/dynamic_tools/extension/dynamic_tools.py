@@ -49,7 +49,7 @@ IMPORTANT CAVEATS (read before relying on this):
    and installs the plugin::
 
         dcode plugin marketplace add ./marketplace
-        dcode plugin install dynamic_tools@evroc-extensions
+        dcode plugin install dynamic_tools@metalgate-extensions
 """
 
 from __future__ import annotations

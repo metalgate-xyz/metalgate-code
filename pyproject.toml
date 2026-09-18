@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "deepagents-code==0.1.69",
-    "evroc",
+    "evroc-dcode",
     "dcode-seatbelt-sandbox",
     "dcode-bubblewrap-sandbox",
     "tree-sitter",
@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-evroc = { path = "evroc", editable = true }
+evroc-dcode = { path = "evroc-dcode", editable = true }
 dcode-seatbelt-sandbox = { path = "seatbelt-sandbox", editable = true }
 dcode-bubblewrap-sandbox = { path = "bubblewrap-sandbox", editable = true }
 

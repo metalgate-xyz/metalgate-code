@@ -633,9 +633,9 @@ wheels = [
 ]
 
 [[package]]
-name = "evroc"
+name = "evroc-dcode"
 version = "0.1.0"
-source = { editable = "evroc" }
+source = { editable = "evroc-dcode" }
 dependencies = [
     { name = "langchain-openai" },
     { name = "requests" },
@@ -1474,7 +1474,7 @@ dependencies = [
     { name = "dcode-bubblewrap-sandbox" },
     { name = "dcode-seatbelt-sandbox" },
     { name = "deepagents-code" },
-    { name = "evroc" },
+    { name = "evroc-dcode" },
     { name = "tree-sitter" },
     { name = "tree-sitter-go" },
     { name = "tree-sitter-python" },
@@ -1496,7 +1496,7 @@ requires-dist = [
     { name = "dcode-bubblewrap-sandbox", editable = "bubblewrap-sandbox" },
     { name = "dcode-seatbelt-sandbox", editable = "seatbelt-sandbox" },
     { name = "deepagents-code", specifier = "==0.1.69" },
-    { name = "evroc", editable = "evroc" },
+    { name = "evroc-dcode", editable = "evroc-dcode" },
     { name = "tree-sitter" },
     { name = "tree-sitter-go" },
     { name = "tree-sitter-python" },
