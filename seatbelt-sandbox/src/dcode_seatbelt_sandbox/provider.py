@@ -451,13 +451,8 @@ def _build_bsd_grep_cmd(
     NUL-after-filename flag on both BSD grep and GNU grep, so the parser works
     unchanged.
 
-    The slash-containing-glob branch (the base in-process Python template) is
-    re-encoded: the base template embeds unescaped ``"`` inside Python
-    comments, and ``_argv`` wraps every command in ``sh -c "..."``, so those
-    quotes prematurely close the shell quote and truncate the script at the
-    ``try:`` block (``SyntaxError: expected 'except' or 'finally' block``).
-    Base64-transporting the script body keeps every script character off the
-    shell command line, so the seatbelt ``sh -c`` wrapping can't mangle it.
+    Slash-containing globs can't use ``grep --include`` (basename-only), so
+    they run an in-process Python search; see ``_grep_path_glob_cmd_safe``.
     """
     if glob and "/" in glob:
         return _grep_path_glob_cmd_safe(pattern, path, glob, max_count)
@@ -480,17 +475,16 @@ def _grep_path_glob_cmd_safe(
 ) -> str:
     """Slash-glob grep command that survives the seatbelt ``sh -c`` wrapping.
 
-    Re-implements the base ``_GREP_PATH_GLOB_TEMPLATE`` behavior (resolve a
-    ``/``-containing glob in-process, emit ``path\\0line:text`` records) but
-    ships the Python script to the sandbox base64-encoded, so its literal
-    ``"`` and ``$`` characters never reach the shell. The base template's
-    inline ``python3 -c "..."`` breaks under ``sh -c "..."`` because comment
-    quotes close the shell's outer quote; this sidesteps that entirely.
+    Resolves a ``/``-containing glob in-process and emits ``path\\0line:text``
+    records. The Python script is fed to ``python3 -`` through a
+    quoted-delimiter heredoc (``<<'PY'``), which makes the shell treat the
+    body as literal text, so the script's ``'``, ``"``, and ``$`` characters
+    never reach shell parsing. Search path, glob, pattern, and max_count
+    travel as ``sys.argv`` tokens, ``shlex.quote``-d against the inner shell.
     """
-    script = (
+    body = (
         "import glob, os, sys\n"
-        "args = sys.argv[2:]\n"
-        "search_path, glob_pat, pattern, mc = args[0], args[1], args[2], args[3]\n"
+        "search_path, glob_pat, pattern, mc = sys.argv[1:]\n"
         "max_count = int(mc) if mc else None\n"
         "match_count = 0\n"
         "if os.path.isdir(search_path):\n"
@@ -522,20 +516,10 @@ def _grep_path_glob_cmd_safe(
         "    except OSError:\n"
         "        pass\n"
     )
-    runner = "import base64,sys; exec(base64.b64decode(sys.argv[1]).decode('utf-8'))"
-    encoded = base64.b64encode(script.encode("utf-8")).decode("ascii")
     max_count_str = str(int(max_count)) if max_count is not None else ""
-    parts = [
-        "python3",
-        "-c",
-        runner,
-        encoded,
-        path or ".",
-        glob,
-        pattern,
-        max_count_str,
-    ]
-    return " ".join(shlex.quote(p) for p in parts) + " 2>/dev/null"
+    args = [path or ".", glob, pattern, max_count_str]
+    head = "python3 - " + " ".join(shlex.quote(a) for a in args) + " 2>/dev/null <<'PY'"
+    return f"{head}\n{body}\nPY"
 
 
 class SeatbeltSandbox(BaseSandbox):

@@ -201,15 +201,6 @@ class TestBsdGrepBuilder:
         cmd = _build_bsd_grep_cmd("hello", "/p", None, max_count=10)
         assert "| head -n 11 || true" in cmd
 
-    def test_slash_glob_uses_python_not_grep(self) -> None:
-        # Slash-containing globs can't use `grep --include` (basename-only), so
-        # they run an in-process Python search that writes its own
-        # `path\0line:text` records.
-        cmd = _build_bsd_grep_cmd("hello", "/p", "src/**/*.py")
-        assert "python3 -c" in cmd
-        assert "-rHnFZ" not in cmd
-        assert "--null" not in cmd
-
     def test_slash_glob_command_survives_sh_c_wrap(self) -> None:
         # The seatbelt provider wraps every command in `sh -c "cd ... && <cmd>"`.
         # The slash-glob command must survive that wrap: exit 0 and emit a
