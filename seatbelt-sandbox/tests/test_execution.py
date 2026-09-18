@@ -487,3 +487,30 @@ class TestWriteConfinement:
         finally:
             with contextlib.suppress(FileNotFoundError):
                 target.unlink()
+
+
+# TLS trust (keychain / system roots)
+
+
+class TestTLSTrust:
+    """HTTPS certificate verification needs the trustd / SecurityServer Mach
+    services, which (deny default) blocks unless explicitly allowed. Without
+    them, TLS verification fails with a certificate error. Probed with curl,
+    which uses the same SecTrustEvaluate path on Darwin.
+    """
+
+    @pytest.mark.parametrize("sandbox", [None], indirect=True)
+    def test_https_certificate_verification_succeeds(
+        self, sandbox: SeatbeltSandbox
+    ) -> None:
+        r = sandbox.execute(
+            "curl -sI --max-time 8 https://proxy.golang.org 2>&1; echo exit=$?"
+        )
+        # Without the trustd/SecurityServer mach-lookup allows, curl fails
+        # cert verification (exit 60, "certificate ... unknown authority").
+        if "certificate" in r.output.lower() or "unknown authority" in r.output:
+            pytest.fail(f"TLS certificate verification failed: {r.output}")
+        # A plain no-network failure is a different message; skip it.
+        if "exit=0" not in r.output:
+            pytest.skip(f"no network to reach proxy.golang.org: {r.output}")
+        assert "HTTP/" in r.output, r.output

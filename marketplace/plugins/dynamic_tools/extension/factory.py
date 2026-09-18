@@ -11,11 +11,9 @@ work (``mkdir``, ``stat``, ``rglob``, file reads) is offloaded to a thread via
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .dynamic_tools import (
-    LOCAL_TOOLS_DIRNAME,
     _state_for,
     resolve_tool_directories,
     scan_and_register,
@@ -33,13 +31,15 @@ async def extension(api: ExtensionAPI) -> None:
     ``.py`` file and registering its top-level callables as model tools.
     """
     directories = resolve_tool_directories(api)
-    # The current project root's tools directory is where agent-authored tool
-    # files are written, so ensure it exists. The agent project root's
-    # global_tools directory is only scanned (it is expected to already exist
-    # when it contributes tools).
+    # Ensure both scanned directories exist. The local tools dir is where
+    # agent-authored tool files land; the agent repo's global_tools dir ships
+    # repo-wide tools. Creating them up front also lets the sandbox bind them
+    # read-write so the agent can edit global tool source when dcode runs from
+    # a different project.
     # mkdir is a blocking call; run it off the event loop.
-    current_dir = Path(api.cwd) / LOCAL_TOOLS_DIRNAME
-    await asyncio.to_thread(lambda: current_dir.mkdir(parents=True, exist_ok=True))
+    await asyncio.to_thread(
+        lambda: [d.mkdir(parents=True, exist_ok=True) for d in directories]
+    )
 
     # scan_and_register does stat/rglob/import -- all blocking; offload it.
     await asyncio.to_thread(scan_and_register, api, directories)
@@ -68,7 +68,7 @@ async def extension(api: ExtensionAPI) -> None:
             return "Refusing: filename must be a plain name with no path separators."
         if not filename.endswith(".py"):
             filename += ".py"
-        target = current_dir / filename
+        target = directories.local / filename
         target.write_text(code)
         return f"Wrote {target}. Call reload_dynamic_tools() to activate it."
 

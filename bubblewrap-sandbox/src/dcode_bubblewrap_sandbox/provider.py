@@ -58,6 +58,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -170,6 +171,10 @@ _TOOL_WRITE_PATHS = (
     # gopls's own cache (typerefs, export data, diagnostics). Without write
     # access gopls logs errors on every request and degrades.
     ".cache/gopls",
+    # Go: `go mod download` writes downloaded modules to the module cache at
+    # $GOPATH/pkg/mod (default ~/go/pkg/mod). The whole ~/go tree must be
+    # writable so Go can create pkg/mod and its cache/sum subdirs from scratch.
+    "go",
     # uv: writes downloaded wheels and the sdist git index (sdists-v9/.git)
     # here; a read-only cache makes installs fail with "Operation not
     # permitted" on the .git index.
@@ -239,6 +244,40 @@ def _resolve_launch_dir() -> Path:
         base = ctx.project_root if ctx.project_root is not None else ctx.user_cwd
         return base.resolve()
     return Path.cwd().resolve()
+
+
+def _running_venv() -> Path | None:
+    """Return the venv dcode runs in, or None for the system interpreter.
+
+    ``sys.prefix`` is the active venv root; it equals ``sys.base_prefix``
+    only outside a venv. Bound read-only so the inherited PATH resolves to
+    its binaries even when dcode is launched outside the venv's project.
+    """
+    if sys.prefix == sys.base_prefix:
+        return None
+    return Path(sys.prefix).resolve()
+
+
+def _agent_home() -> Path:
+    """Return the dcode profile root (``DEEPAGENTS_HOME`` or the default)."""
+    raw = os.environ.get("DEEPAGENTS_HOME")
+    if raw:
+        return Path(raw).expanduser().resolve()
+    return (Path.home() / ".deepagents").resolve()
+
+
+def _agent_rw_paths() -> list[Path]:
+    """Return existing agent-authoring paths under the profile root.
+
+    ``agent/AGENTS.md`` (agent memory) and ``global_tools`` (agent repo tool
+    source) live under the profile root, outside the launch dir when dcode
+    runs against a different project. Bound read-write so the agent can edit
+    them. Nonexistent entries are skipped: ``bwrap --bind`` fails on a missing
+    source, and ``global_tools`` is created by the dynamic_tools plugin.
+    """
+    home = _agent_home()
+    candidates = [home / "agent" / "AGENTS.md", home / "global_tools"]
+    return [p.resolve() for p in candidates if p.exists()]
 
 
 def _resolve_path(rel: str) -> Path:
@@ -547,6 +586,23 @@ class BubblewrapSandbox(BaseSandbox):
         argv += _bind_ancestor_args(launch_str, bound)
         argv += ["--bind", launch_str, launch_str]
         bound.add(launch_str)
+
+        # dcode's own venv, read-only: needed when launched outside its project.
+        venv = _running_venv()
+        if venv is not None:
+            venv_str = str(venv)
+            argv += _bind_ancestor_args(venv_str, bound)
+            argv += ["--ro-bind", venv_str, venv_str]
+            bound.add(venv_str)
+
+        # Agent memory (AGENTS.md) and global tool source (global_tools) under
+        # the profile root, read-write: needed when the profile sits outside
+        # the launch dir.
+        for p in _agent_rw_paths():
+            p_str = str(p)
+            argv += _bind_ancestor_args(p_str, bound)
+            argv += ["--bind", p_str, p_str]
+            bound.add(p_str)
 
         # --- Curated tool paths under $HOME (read-only) --------------------
         # Compilers/runtimes/VCS caches keep working without exposing the
