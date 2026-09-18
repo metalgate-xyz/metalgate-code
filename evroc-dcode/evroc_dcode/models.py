@@ -1,4 +1,8 @@
-"""Dynamic model discovery for the evroc API."""
+"""Dynamic model discovery for the evroc API.
+
+The evroc-dcode package fetches model IDs from the evroc inference endpoint
+and persists them to ``.evroc/models.json`` for dcode's ``/model`` switcher.
+"""
 
 from __future__ import annotations
 
@@ -45,6 +49,8 @@ def fetch_models(
     except requests.exceptions.RequestException as e:
         logger.warning("Failed to fetch evroc models: %s", e)
         return []
+
+    print(response.json())
 
     return [m["id"] for m in response.json().get("data", [])]
 

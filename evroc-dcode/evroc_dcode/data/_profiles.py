@@ -1,4 +1,4 @@
-"""Model profiles for the evroc provider.
+"""Model profiles for the evroc-dcode provider.
 
 Reads ``.evroc/models.json`` at import time and builds ``_PROFILES``
 dynamically.  ``run.sh`` fetches models from the evroc API and writes
