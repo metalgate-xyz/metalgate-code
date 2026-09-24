@@ -5,7 +5,7 @@ description = "Launch deepagents code CLI with the evroc model provider and the 
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "deepagents-code==0.1.71",
+    "deepagents-code==0.1.75",
     "evroc-dcode",
     "dcode-seatbelt-sandbox",
     "dcode-bubblewrap-sandbox",
