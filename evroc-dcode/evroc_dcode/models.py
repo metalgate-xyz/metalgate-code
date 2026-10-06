@@ -15,7 +15,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_BASE_URL = "https://models.think.cloud.evroc.com/v1"
+DEFAULT_BASE_URL = "https://models.think.evroc.com/v1"
 
 EVROC_DATA_DIR = Path(os.environ.get("EVROC_DATA_DIR", ".evroc"))
 MODELS_FILE = EVROC_DATA_DIR / "models.json"
