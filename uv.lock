@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.13"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -621,7 +621,7 @@ provides-extras = ["dcode", "test"]
 
 [[package]]
 name = "deepagents"
-version = "0.7.22"
+version = "0.7.23"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "langchain" },
@@ -632,9 +632,9 @@ dependencies = [
     { name = "packaging" },
     { name = "wcmatch" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/13/28/517fd5fd731e6a7c659aa31218e567ff2f766aca6c075c1086fbf5595f31/deepagents-0.7.22.tar.gz", hash = "sha256:002203b62a6f535914757e198721c003792def37c065b3dd95ce2ba2ae7a919a", size = 322350, upload-time = "2026-10-05T14:07:41.167Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3d/80/3f1e3f28e277d2583ae25b49d6c3eb1a494c176191c02d68275bff9b21b7/deepagents-0.7.23.tar.gz", hash = "sha256:03fbffec1691f72e412eb9251516a799ac3f5d3851defb4a98a49fece5675c10", size = 324077, upload-time = "2026-10-07T16:46:01.2Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d1/8b/18ecba94780bb1f6e4733a60b23b9290225144c2004273de118995d80fb3/deepagents-0.7.22-py3-none-any.whl", hash = "sha256:c6f59bfadddf411ce0856a2cf16d82be3ea736285420db6c0005b87992a1cbef", size = 351620, upload-time = "2026-10-05T14:07:39.616Z" },
+    { url = "https://files.pythonhosted.org/packages/38/4a/9ffaf3045014ac8733c121e2b9d7e15e652f29ac42c179871960f7537e93/deepagents-0.7.23-py3-none-any.whl", hash = "sha256:ccba4ca32e82f422e08c04b2321d135f1be321fc44ae5891b9b37a7c8bde5ca7", size = 353394, upload-time = "2026-10-07T16:45:59.917Z" },
 ]
 
 [[package]]
@@ -653,7 +653,7 @@ wheels = [
 
 [[package]]
 name = "deepagents-code"
-version = "0.1.82"
+version = "0.1.83"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiosqlite" },
@@ -692,9 +692,9 @@ dependencies = [
     { name = "tomli-w" },
     { name = "uuid-utils" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/18/d1/c81d197ca9f86112000d5bb543205d86986c4b4b6df5ffa9e111bdd76ced/deepagents_code-0.1.82.tar.gz", hash = "sha256:67996b603163321eb8605d59f5b1b181191707ec0f0d8788a46e0ea87f5ddbd2", size = 4497707, upload-time = "2026-10-07T15:33:30.832Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ac/4b/63796b56afd33bff8c65c3800f3c3f5b720432b3111bffb5d1774fd5ffa1/deepagents_code-0.1.83.tar.gz", hash = "sha256:53e0b3f9e545a0d8b2b3564501ff6d4716ce38d80caaa0970d3e54712873c3b5", size = 4499079, upload-time = "2026-10-07T21:55:44.098Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3e/23/af63cc29ef9ff0e873c1400a9686de096e637213434dd7353bc398225423/deepagents_code-0.1.82-py3-none-any.whl", hash = "sha256:de30f38cfb9189d292799bdb2204c0d41fe67fd868368030955d9115b94299ce", size = 2354087, upload-time = "2026-10-07T15:33:28.83Z" },
+    { url = "https://files.pythonhosted.org/packages/f9/fd/6bf2a35addce806c8af482621efff2c6c1fc4aed6f3c86f3a0177f89fb53/deepagents_code-0.1.83-py3-none-any.whl", hash = "sha256:e6fafb872b706260f2076c96fa8d66649cf9cc42ea87b41769676167988f1893", size = 2354697, upload-time = "2026-10-07T21:55:42.076Z" },
 ]
 
 [[package]]
@@ -1372,7 +1372,7 @@ wheels = [
 
 [[package]]
 name = "langchain-core"
-version = "1.6.6"
+version = "1.6.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -1386,9 +1386,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "uuid-utils" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/18/87/9e5d393bbcec068c51becc255a15aacfd8a14ac5826179751c1c320e5258/langchain_core-1.6.6.tar.gz", hash = "sha256:67616d984c085009be2c381c2efd330d32429a58aebab295b4f51b6573964511", size = 1007227, upload-time = "2026-09-29T14:52:54.598Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0b/0e/cd8ace920319158f1111ad3e6d6a418254fad7594402a57560ff285d5127/langchain_core-1.6.7.tar.gz", hash = "sha256:55842ca61ffb460787c6f62c8bf775275972e9b9a3fd9b2210931eb77d038e2d", size = 1009564, upload-time = "2026-10-06T15:46:53.498Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/90/10/8c00b4dc094886314c907ec7ead258dfee28948cf44175976cc4fba9aba8/langchain_core-1.6.6-py3-none-any.whl", hash = "sha256:d9a71e312ab7443701238750e04a57aefc037c4f1ec82837c8a1609d9a14a9b1", size = 572080, upload-time = "2026-09-29T14:52:53.213Z" },
+    { url = "https://files.pythonhosted.org/packages/af/fb/12b08f501fb2fc379b82eb5c391b56c6ecc70d30aedeb4acb44de03a9252/langchain_core-1.6.7-py3-none-any.whl", hash = "sha256:e12cb80b2008b0484c33d209c42d6290ef173f7be9d639b372aba0d438676cdd", size = 572761, upload-time = "2026-10-06T15:46:52.069Z" },
 ]
 
 [[package]]
@@ -1542,7 +1542,7 @@ wheels = [
 
 [[package]]
 name = "langgraph-cli"
-version = "0.4.32"
+version = "0.4.33"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -1551,9 +1551,9 @@ dependencies = [
     { name = "pathspec" },
     { name = "python-dotenv" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/00/39/c8a77a0e5ab87c9cebf135e6cfcf3456570eba0b56f931b49ffac5362849/langgraph_cli-0.4.32.tar.gz", hash = "sha256:d06d6311ca9804f3b9940a6c44f9993a8a0bfc3479e0321a26a9b4c73eedaf0e", size = 1087298, upload-time = "2026-09-23T18:02:35.759Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/78/8c/3264f1fb1168681dbe28c08a14dbdd4e0ad404fc881f5e0e63ffc809a3ec/langgraph_cli-0.4.33.tar.gz", hash = "sha256:ad11ee1271176a48bf60a20b8356f59b2aac42f7166e5e4a0f040f3aab2186f6", size = 1092179, upload-time = "2026-10-07T13:38:30.782Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ad/03/b7adc066578ecefbee953cea4432201a9e36a86ba5b07ea2f55c275c7e9e/langgraph_cli-0.4.32-py3-none-any.whl", hash = "sha256:1bd6e4ccd90ffa5659da5d4d4592864407a9e6d66e9cb51a81f41e5a52204509", size = 89483, upload-time = "2026-09-23T18:02:34.603Z" },
+    { url = "https://files.pythonhosted.org/packages/24/06/1ffa188545bee9d73bd6df18750894c4351c38d3755dde77e3ea9071b608/langgraph_cli-0.4.33-py3-none-any.whl", hash = "sha256:09d76c0aed5b661a22760547997038de05f18d7598bb698d921f701831875b41", size = 91602, upload-time = "2026-10-07T13:38:29.655Z" },
 ]
 
 [package.optional-dependencies]
@@ -1577,7 +1577,7 @@ wheels = [
 
 [[package]]
 name = "langgraph-runtime-inmem"
-version = "0.35.2"
+version = "0.35.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "blockbuster" },
@@ -1588,9 +1588,9 @@ dependencies = [
     { name = "starlette" },
     { name = "structlog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/98/c4/4c4a97f047ba33bd238ea36c4d85a7be2618cf5b9d2de3683ef53a9abb19/langgraph_runtime_inmem-0.35.2.tar.gz", hash = "sha256:2e4036ecc25c894f1e0e870286ca3138550e11f02163586690300bc9e89008e9", size = 133738, upload-time = "2026-10-06T23:45:14.137Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/61/61/3f6ca961b5fd90ffacece91e66c4e648dd818d8f667d0797015c5c3ab725/langgraph_runtime_inmem-0.35.3.tar.gz", hash = "sha256:fb58a5652563e029acd09e0ece6d51e3958ce195260e9151c7296c461813f126", size = 133743, upload-time = "2026-10-07T20:21:37.415Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/43/85/600e0d91ec64d042ab752fee81968ebe51ec01804f221052cef3a3bc4c5e/langgraph_runtime_inmem-0.35.2-py3-none-any.whl", hash = "sha256:bc6133fe2c80108449fc6a1ee2e102f0120d9d6777f7b4b0647ba8a27b1d5557", size = 52987, upload-time = "2026-10-06T23:45:12.917Z" },
+    { url = "https://files.pythonhosted.org/packages/94/66/d4b1c4ee1a85e15a0ce2729770ef6d8be2fe4e0dbf98e15e74bb9cae229a/langgraph_runtime_inmem-0.35.3-py3-none-any.whl", hash = "sha256:1a52e5821e4266baa0a5599658e1b58501f71fef6e3c2298e6a99114dfcd2ffc", size = 52987, upload-time = "2026-10-07T20:21:36.087Z" },
 ]
 
 [[package]]
@@ -1768,7 +1768,7 @@ dev = [
 requires-dist = [
     { name = "dcode-bubblewrap-sandbox", editable = "bubblewrap-sandbox" },
     { name = "dcode-seatbelt-sandbox", editable = "seatbelt-sandbox" },
-    { name = "deepagents-code", specifier = "==0.1.82" },
+    { name = "deepagents-code", specifier = "==0.1.83" },
     { name = "evroc-dcode", editable = "evroc-dcode" },
     { name = "tree-sitter" },
     { name = "tree-sitter-go" },
@@ -2720,8 +2720,8 @@ name = "secretstorage"
 version = "3.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cryptography" },
-    { name = "jeepney" },
+    { name = "cryptography", marker = "sys_platform != 'win32'" },
+    { name = "jeepney", marker = "sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/03/e834bcd866f2f8a49a85eaff47340affa3bfa391ee9912a952a1faa68c7b/secretstorage-3.5.0.tar.gz", hash = "sha256:f04b8e4689cbce351744d5537bf6b1329c6fc68f91fa666f60a380edddcd11be", size = 19884, upload-time = "2025-11-23T19:02:53.191Z" }
 wheels = [
