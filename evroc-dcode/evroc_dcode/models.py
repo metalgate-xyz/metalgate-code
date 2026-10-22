@@ -50,8 +50,6 @@ def fetch_models(
         logger.warning("Failed to fetch evroc models: %s", e)
         return []
 
-    print(response.json())
-
     return [m["id"] for m in response.json().get("data", [])]
 
 

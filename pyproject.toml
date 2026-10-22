@@ -34,6 +34,7 @@ dev = [
 asyncio_mode = "auto"
 addopts = "--import-mode=importlib"
 testpaths = [
+    "evroc-dcode/tests",
     "marketplace/plugins/dynamic_tools/tests",
     "marketplace/plugins/context_tools/tests",
     "seatbelt-sandbox/tests",

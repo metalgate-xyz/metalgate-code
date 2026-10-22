@@ -40,6 +40,10 @@ export DEEPAGENTS_CODE_EXPERIMENTAL=1
 export DEEPAGENTS_HOME="${SCRIPT_DIR}/.metalgate"
 mkdir -p "${DEEPAGENTS_HOME}"
 
+# Absolute path (not cwd-relative): dcode's inference host subprocess runs
+# from a temp scaffold dir, and model discovery there reads this via env.
+export EVROC_DATA_DIR="${SCRIPT_DIR}/.evroc"
+
 # --- Install ----------------------------------------------------------------
 uv --project "${SCRIPT_DIR}" sync --quiet
 
