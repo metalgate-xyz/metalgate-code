@@ -607,7 +607,7 @@ wheels = [
 
 [[package]]
 name = "deepagents-code"
-version = "0.2.3"
+version = "0.2.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiosqlite" },
@@ -620,6 +620,7 @@ dependencies = [
     { name = "httpx" },
     { name = "langchain" },
     { name = "langchain-anthropic" },
+    { name = "langchain-core" },
     { name = "langchain-google-genai" },
     { name = "langchain-openai" },
     { name = "langchain-quickjs" },
@@ -646,9 +647,9 @@ dependencies = [
     { name = "tomli-w" },
     { name = "uuid-utils" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d6/09/b9496ce442f993e5f445b94e56e81aeeb14adf1e77025d0b94d7c293ba62/deepagents_code-0.2.3.tar.gz", hash = "sha256:396d66cf9cbb9057975c0cfb9e46726b6eeec046da2260e1cde680f436beecb3", size = 4572238, upload-time = "2026-11-02T17:12:21.924Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/87/76/30e67e3f542f4273d3787b9727b14073309f1c623dd982372016c15969fd/deepagents_code-0.2.4.tar.gz", hash = "sha256:28789f0e8845a33d5b25528124933ed027170fa28bb615771d3733f0355e6ec2", size = 4575341, upload-time = "2026-11-02T23:13:43.838Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/51/9d/2e9a975a9dc2874ef193b3f23f8e063a66227b87ca62969185460a4a49ab/deepagents_code-0.2.3-py3-none-any.whl", hash = "sha256:40ca81010e8e406282227b35d138c2362dddd90cac591ace42f3cfc130f8961e", size = 2464218, upload-time = "2026-11-02T17:12:20.226Z" },
+    { url = "https://files.pythonhosted.org/packages/b6/6b/ecddaaf4b0232082847f993c94d1105a310d6aba86b1f7be3f2fed400441/deepagents_code-0.2.4-py3-none-any.whl", hash = "sha256:e65f4178f5cab181b0016774f4db9229d1b5a619bb14578e4f0fa97a18f63f82", size = 2465428, upload-time = "2026-11-02T23:13:41.943Z" },
 ]
 
 [[package]]
@@ -1251,16 +1252,16 @@ wheels = [
 
 [[package]]
 name = "langchain"
-version = "1.4.7"
+version = "1.4.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "langchain-core" },
     { name = "langgraph" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d1/6b/7147b4cfa86091e05e3c0189952d976e13ef27249c8cd9e46d8c742a5b5c/langchain-1.4.7.tar.gz", hash = "sha256:818275348cd707f7fbbe92ece0a725c25823140a054cf29865f420e0200fa2af", size = 762840, upload-time = "2026-10-21T21:39:01.141Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/69/be/4804ba5dcc3fbe50c674e90f1eef5188f2227f4430b7deece7e150ef498a/langchain-1.4.8.tar.gz", hash = "sha256:66649bcf64650235032ca8e25586a263b68b77a0232bb51e87c129e6a5d8e1b2", size = 769415, upload-time = "2026-11-02T15:44:46.926Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/93/2e/86a102e61fc88ede073aebdb795fef0eb058a887bed4aa862e8ca2697565/langchain-1.4.7-py3-none-any.whl", hash = "sha256:bc40d4a9a46f0c3d75e316c0e576931fe19bceef83912a71dc1e0df781eb8f82", size = 170549, upload-time = "2026-10-21T21:38:59.466Z" },
+    { url = "https://files.pythonhosted.org/packages/5e/9c/fce50ccf34389a69125120c018dc9a1a4ca436149eddc7145ab49ca30bc3/langchain-1.4.8-py3-none-any.whl", hash = "sha256:31ddb8688db67f9eb1fd4e77594573ef863b2e3c086397273d4a7a3ff4245b45", size = 170580, upload-time = "2026-11-02T15:44:45.251Z" },
 ]
 
 [[package]]
@@ -1676,7 +1677,7 @@ dev = [
 requires-dist = [
     { name = "dcode-bubblewrap-sandbox", editable = "bubblewrap-sandbox" },
     { name = "dcode-seatbelt-sandbox", editable = "seatbelt-sandbox" },
-    { name = "deepagents-code", specifier = "==0.2.3" },
+    { name = "deepagents-code", specifier = "==0.2.4" },
     { name = "evroc-dcode", editable = "evroc-dcode" },
     { name = "tree-sitter" },
     { name = "tree-sitter-go" },
