@@ -235,7 +235,7 @@ _PROFILE_HEADER = """\
 ;; Paths outside /Users are already readable via the broad allow and are
 ;; skipped by the builder below.
 {read_allows}
-;; Writes: launch dir only (plus /dev/null for shell redirections). Default
+;; Writes: launch dir plus curated tool cache paths under /Users. Default
 ;; deny already blocks every other write, including all of /Users outside the
 ;; launch dir -- no separate /Users write-deny is needed.
 {write_allows}
@@ -293,8 +293,6 @@ _TOOL_READ_PATHS = (
     "go",
     "go.work",
     "Library/Caches/gopls",
-    # Cargo/rust crates index
-    ".cargo/registry",
 )
 
 
@@ -322,6 +320,9 @@ _TOOL_WRITE_PATHS = (
     # permitted" on the .git index.
     ".cache/uv",
     "Library/Caches/uv",
+    # Rust: registry index, downloaded crates, and git-dependency checkouts.
+    ".cargo/registry",
+    ".cargo/git",
 )
 
 

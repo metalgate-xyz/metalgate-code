@@ -25,6 +25,7 @@ import pytest
 from dcode_bubblewrap_sandbox.provider import (
     BubblewrapProvider,
     BubblewrapSandbox,
+    _tool_write_paths,
 )
 
 pytestmark = pytest.mark.skipif(
@@ -161,6 +162,31 @@ class TestReadPaths:
         finally:
             with contextlib.suppress(FileNotFoundError):
                 target.unlink()
+
+
+# toolchain write paths
+
+
+class TestToolWritePaths:
+    """Every path `_tool_write_paths` binds must accept writes inside the
+    sandbox. bwrap applies mounts in argv order, so an rw bind landing before
+    an overlapping ro bind (e.g. a cache under $HOME) is silently shadowed;
+    this catches that class of bug live rather than by inspecting argv."""
+
+    @pytest.mark.parametrize("sandbox", [None], indirect=True)
+    def test_tool_write_paths_accept_writes(
+        self, sandbox: BubblewrapSandbox
+    ) -> None:
+        failures: list[str] = []
+        for path in _tool_write_paths():
+            probe = f"{path}/bwrap-wtest-{os.getpid()}"
+            r = sandbox.execute(f"echo data > {shlex.quote(probe)} 2>&1; echo exit=$?")
+            if "exit=0" not in r.output:
+                failures.append(f"{path}: {r.output.strip()}")
+                continue
+            with contextlib.suppress(FileNotFoundError):
+                Path(probe).unlink()
+        assert not failures, "unwritable tool paths:\n" + "\n".join(failures)
 
 
 # process bootstrap

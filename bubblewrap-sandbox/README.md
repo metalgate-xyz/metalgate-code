@@ -57,9 +57,11 @@ dcode --sandbox bubblewrap --sandbox-id my-project
   read_paths = ["/home/you/code/other-project"]
   ```
 
-  Writes are confined to the launch dir: nothing else is mounted writable,
-  so every other path is either read-only (the system binds) or
-  non-existent (everything else).
+  Writes are confined to the launch dir, the host `/tmp` (bound read-write,
+  so scratch files persist across commands and are shared with the host),
+  and the toolchain cache subpaths compilers and language servers write to
+  (`go`, `.cache/go-build`, `.cargo/registry`, `.cargo/git`, ...). Everything
+  else is either read-only (the system binds) or non-existent.
 - **Environment**: commands run with a minimal, secret-free environment
   (PATH, HOME, TMPDIR, SHELL, LANG). dcode's own environment (typically
   containing API keys and tokens like `OPENAI_API_KEY`, `GITHUB_TOKEN`) is

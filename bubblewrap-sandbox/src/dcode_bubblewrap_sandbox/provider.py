@@ -26,9 +26,10 @@ invisible rather than merely denied: `~/.ssh`, `~/.aws`, other users' files,
 ``[sandboxes.providers.bubblewrap.params]`` in ``~/.deepagents/config.toml``)
 adds extra read-only bind mounts on top of that.
 
-Writes are confined to the launch dir: nothing else is mounted writable, so
-every other path is either read-only (system binds) or non-existent
-(everything else). Network is **allowed by default** (coding work needs it:
+Writes are confined to the launch dir, the host `/tmp`, and the curated
+toolchain cache subpaths that compilers and language servers write to.
+Everything else is either read-only (system binds) or non-existent.
+Network is **allowed by default** (coding work needs it:
 pip, npm, git, tests, dev servers): the host network namespace is shared.
 Pass ``network=False`` to opt out, which adds ``--unshare-net`` (loopback
 only). Every operation -- ``execute``, ``upload_files``, ``download_files``
@@ -179,6 +180,9 @@ _TOOL_WRITE_PATHS = (
     # here; a read-only cache makes installs fail with "Operation not
     # permitted" on the .git index.
     ".cache/uv",
+    # Rust: registry index, downloaded crates, and git-dependency checkouts.
+    ".cargo/registry",
+    ".cargo/git",
     # Nix
     "/nix/store",
     "/nix/var",
@@ -568,11 +572,12 @@ class BubblewrapSandbox(BaseSandbox):
             bound.add(dst)
         argv += ["--proc", "/proc", "--dev", "/dev"]
         bound.update({"/proc", "/dev"})
-        # A writable /tmp: Go's toolchain (`go list`, `go build`) creates temp
-        # work dirs under /tmp (via /tmp, not TMPDIR). Without a writable /tmp
-        # package loading fails with "mkdir /tmp/go-build*: operation not
-        # permitted".
-        argv += ["--tmpfs", "/tmp"]
+        # The host /tmp, bound read-write like seatbelt does: toolchains need
+        # a writable /tmp (e.g. `go build` creates temp work dirs there, not
+        # under TMPDIR), and a scratch area that persists across execute
+        # calls and is shared with the host (a fresh per-invocation tmpfs
+        # loses files between commands and hides host scratch files).
+        argv += ["--bind", "/tmp", "/tmp"]
         bound.add("/tmp")
 
         # --- Launch dir (read/write) ---------------------------------------

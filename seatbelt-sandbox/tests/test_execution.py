@@ -27,6 +27,7 @@ from dcode_seatbelt_sandbox.provider import (
     _PROFILES_ROOT,
     SeatbeltProvider,
     SeatbeltSandbox,
+    _tool_write_paths,
 )
 
 pytestmark = pytest.mark.skipif(
@@ -162,6 +163,39 @@ class TestReadPaths:
         finally:
             with contextlib.suppress(FileNotFoundError):
                 target.unlink()
+
+
+# toolchain write paths
+
+
+class TestToolWritePaths:
+    """Every path `_tool_write_paths` re-allows must accept writes inside the
+    sandbox. SBPL is last-match-wins, so a write allow that is missing or
+    shadowed by a later deny leaves the path unwritable; this catches that
+    live rather than by inspecting profile text."""
+
+    @pytest.mark.parametrize("sandbox", [None], indirect=True)
+    def test_tool_write_paths_accept_writes(
+        self, sandbox: SeatbeltSandbox
+    ) -> None:
+        failures: list[str] = []
+        created: list[Path] = []
+        for path in _tool_write_paths():
+            d = Path(path)
+            try:
+                d.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                pytest.skip(f"cannot create {path}: {exc}")
+            probe = d / f"seatbelt-wtest-{os.getpid()}"
+            r = sandbox.execute(f"echo data > {shlex.quote(str(probe))} 2>&1; echo exit=$?")
+            if "exit=0" not in r.output:
+                failures.append(f"{path}: {r.output.strip()}")
+                continue
+            created.append(probe)
+        assert not failures, "unwritable tool paths:\n" + "\n".join(failures)
+        for probe in created:
+            with contextlib.suppress(FileNotFoundError):
+                probe.unlink()
 
 
 # process bootstrap

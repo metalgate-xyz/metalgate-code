@@ -225,10 +225,16 @@ class TestArgvConstruction:
         sb = BubblewrapSandbox("argv-test", tmp_path)
         argv = sb._bwrap_argv("echo hi")
         resolved = str(tmp_path.resolve())
-        # --bind is rw; the launch dir appears as both src and dst at its real path.
-        idx = argv.index("--bind")
-        assert argv[idx + 1] == resolved
-        assert argv[idx + 2] == resolved
+        # --bind is rw; the launch dir appears as both src and dst at its
+        # real path. Scan the pairs: other rw binds (/tmp) precede it, and a
+        # /tmp bound after the launch dir would shadow it when the launch
+        # dir lives under /tmp (as pytest's tmp_path does).
+        binds = [
+            (argv[i + 1], argv[i + 2])
+            for i in range(len(argv) - 2)
+            if argv[i] == "--bind"
+        ]
+        assert (resolved, resolved) in binds
 
     def test_argv_binds_system_ro(self, tmp_path: Path) -> None:
         sb = BubblewrapSandbox("argv-test", tmp_path)
