@@ -612,7 +612,7 @@ wheels = [
 
 [[package]]
 name = "deepagents-code"
-version = "0.2.12"
+version = "0.2.13"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiosqlite" },
@@ -652,9 +652,9 @@ dependencies = [
     { name = "tomli-w" },
     { name = "uuid-utils" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/65/cb/e9ac1dee6cb2b7a75303c03421a64e2e34a9576738e98e87a36c0e842d66/deepagents_code-0.2.12.tar.gz", hash = "sha256:71017b8d03e03e45d1e6be1e87e953c2a53e3462aba6518925217529df162f21", size = 4633359, upload-time = "2026-11-20T04:19:17.695Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6e/23/f7d730830f5bd8c38b62f30d34501d82d3afa08e7ddc4082f3d00800af05/deepagents_code-0.2.13.tar.gz", hash = "sha256:6835f37e61c3b68f922fb7e747f129b333dc173d6f8c9093bd78508e49d3e4a9", size = 4636904, upload-time = "2026-11-20T22:28:43.635Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/59/4d/61e6a3a10ab794198a573b81a5e87f4fabef6ff92d391c0c5f9e23ea47c1/deepagents_code-0.2.12-py3-none-any.whl", hash = "sha256:3d0075fee91022a845ad60a5aad07471b41d5ec2d435f4c1324021cc99145cbd", size = 2495024, upload-time = "2026-11-20T04:19:15.921Z" },
+    { url = "https://files.pythonhosted.org/packages/ec/29/3e5ae6a6f38e91f9862c11f4ff6b253b924c1895b44159bfdfa6d323121f/deepagents_code-0.2.13-py3-none-any.whl", hash = "sha256:fe9b4af4c9aeb19a060728088bb31bb42d36fcd62b4160f802b827d54b34a825", size = 2496878, upload-time = "2026-11-20T22:28:41.656Z" },
 ]
 
 [[package]]
@@ -1682,7 +1682,7 @@ dev = [
 requires-dist = [
     { name = "dcode-bubblewrap-sandbox", editable = "bubblewrap-sandbox" },
     { name = "dcode-seatbelt-sandbox", editable = "seatbelt-sandbox" },
-    { name = "deepagents-code", specifier = "==0.2.12" },
+    { name = "deepagents-code", specifier = "==0.2.13" },
     { name = "evroc-dcode", editable = "evroc-dcode" },
     { name = "tree-sitter" },
     { name = "tree-sitter-go" },
